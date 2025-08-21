@@ -1,5 +1,15 @@
 part of 'watch_it.dart';
 
+String _getSourceLocation() {
+  final trace = StackTrace.current;
+  final lines = trace.toString().split('\n');
+  final indexOfGetItElement =
+      lines.indexWhere((line) => line.contains('GetItElement'));
+
+  /// this should be the line that contains the name of widget that uses the watch
+  return lines[indexOfGetItElement - 2];
+}
+
 class _WatchEntry<TObservedObject, TValue> {
   TObservedObject observedObject;
   VoidCallback? notificationHandler;
@@ -9,6 +19,9 @@ class _WatchEntry<TObservedObject, TValue> {
   bool isHandlerWatch;
   TValue? Function(TObservedObject)? selector;
   bool handlerWasCalled = false;
+  Object? parentObject;
+  String? sourceLocationOfWatch;
+  WatchItEvent? eventType;
 
   Object? activeCallbackIdentity;
   _WatchEntry(
@@ -18,10 +31,31 @@ class _WatchEntry<TObservedObject, TValue> {
       required void Function(_WatchEntry entry)? dispose,
       this.lastValue,
       this.isHandlerWatch = false,
-      required this.observedObject})
-      : _dispose = dispose;
+      required this.observedObject,
+      this.parentObject,
+      this.eventType,
+      bool shouldTrace = false})
+      : _dispose = dispose {
+    assert(() {
+      if (shouldTrace) {
+        sourceLocationOfWatch = _getSourceLocation();
+      }
+      return true;
+    }());
+  }
   void dispose() {
     _dispose?.call(this);
+  }
+
+  void _logWatchItEvent() {
+    final eventTypeToLog = eventType ??
+        (isHandlerWatch ? WatchItEvent.handler : WatchItEvent.rebuild);
+    watchItLogFunction?.call(
+      sourceLocationOfWatch: sourceLocationOfWatch,
+      eventType: eventTypeToLog,
+      observedObject: observedObject,
+      parentObject: parentObject,
+    );
   }
 
   bool watchesTheSameAndNotHandler(_WatchEntry entry) {
@@ -44,7 +78,29 @@ class _WatchItState {
   final _watchList = <_WatchEntry>[];
   int? currentWatchIndex;
 
+  bool _logRebuilds = false;
+  bool _logHandlers = false;
+  bool _logHelperFunctions = false;
+
+  void enableTracing(
+      {bool logRebuilds = true,
+      bool logHandlers = true,
+      bool logHelperFunctions = true}) {
+    _logRebuilds = logRebuilds;
+    _logHandlers = logHandlers;
+    _logHelperFunctions = logHelperFunctions;
+  }
+
   static CustomValueNotifier<bool?>? onScopeChanged;
+
+  void _markNeedsBuild(_WatchEntry? watch) {
+    if (_element != null) {
+      if (_logRebuilds) {
+        watch?._logWatchItEvent();
+      }
+      _element!.markNeedsBuild();
+    }
+  }
 
   // ignore: use_setters_to_change_properties
   void init(Element element) {
@@ -61,7 +117,29 @@ class _WatchItState {
     }
   }
 
+  /// Check for WatchItSubTreeTraceControl in the widget tree and apply its settings
+  void _checkSubTreeTracing() {
+    if (_element == null) return;
+
+    // Use the proper InheritedWidget access pattern
+    final traceControl = WatchItSubTreeTraceControl.maybeOf(_element!);
+    if (traceControl != null) {
+      _logRebuilds = traceControl.logRebuilds;
+      _logHandlers = traceControl.logHandlers;
+      _logHelperFunctions = traceControl.logHelperFunctions;
+    } else {
+      // If no WatchItSubTreeTraceControl found, disable tracing
+      _logRebuilds = false;
+      _logHandlers = false;
+      _logHelperFunctions = false;
+    }
+  }
+
   void resetCurrentWatch() {
+    /// Check for WatchItSubTreeTraceControl in the widget tree if global tracing is enabled
+    if (enableSubTreeTracing) {
+      _checkSubTreeTracing();
+    }
     // print('resetCurrentWatch');
     currentWatchIndex = _watchList.isNotEmpty ? 0 : null;
   }
@@ -102,6 +180,8 @@ class _WatchItState {
     void Function(BuildContext context, R newValue, void Function() dispose)?
         handler,
     bool executeImmediately = false,
+    Type? parentObjectType,
+    Object? parentObject,
   }) {
     var watch = _getWatch() as _WatchEntry<Listenable, R>?;
 
@@ -120,6 +200,8 @@ class _WatchItState {
           x.notificationHandler!,
         ),
         isHandlerWatch: handler != null,
+        parentObject: parentObject,
+        shouldTrace: _logRebuilds || _logHandlers,
       );
       _appendWatch(watch);
     }
@@ -134,12 +216,18 @@ class _WatchItState {
       }
       if (handler != null) {
         if (target is ValueListenable) {
+          if (_logHandlers) {
+            watch?._logWatchItEvent();
+          }
           handler(_element!, target.value, watch!.dispose);
         } else {
+          if (_logHandlers) {
+            watch?._logWatchItEvent();
+          }
           handler(_element!, target as R, watch!.dispose);
         }
       } else {
-        _element!.markNeedsBuild();
+        _markNeedsBuild(watch);
       }
     };
     watch.notificationHandler = internalHandler;
@@ -154,8 +242,14 @@ class _WatchItState {
         return;
       }
       if (target is ValueListenable) {
+        if (_logHandlers) {
+          watch._logWatchItEvent();
+        }
         handler(_element!, target.value, watch.dispose);
       } else {
+        if (_logHandlers) {
+          watch._logWatchItEvent();
+        }
         handler(_element!, target as R, watch.dispose);
       }
     }
@@ -164,6 +258,7 @@ class _WatchItState {
   watchPropertyValue<T extends Listenable, R>({
     required T listenable,
     required R Function(T) only,
+    Object? parentObject,
   }) {
     var watch = _getWatch() as _WatchEntry<Listenable, R>?;
 
@@ -182,7 +277,9 @@ class _WatchItState {
           selector: only,
           lastValue: only(listenable),
           dispose: (x) =>
-              x.observedObject!.removeListener(x.notificationHandler!));
+              x.observedObject!.removeListener(x.notificationHandler!),
+          parentObject: parentObject,
+          shouldTrace: _logRebuilds || _logHandlers);
       _appendWatch(watch, allowMultipleSubscribers: true);
       // we have to set `allowMultipleSubscribers=true` because we can't differentiate
       // one selector function from another.
@@ -197,7 +294,7 @@ class _WatchItState {
       }
       final newValue = only(listenable);
       if (watch!.lastValue != newValue) {
-        _element!.markNeedsBuild();
+        _markNeedsBuild(watch);
         watch.lastValue = newValue;
       }
     }
@@ -215,6 +312,7 @@ class _WatchItState {
     void Function(BuildContext context, AsyncSnapshot<R> snapshot,
             void Function() cancel)?
         handler,
+    Object? parentObject,
   }) {
     final stream = target;
 
@@ -244,6 +342,8 @@ class _WatchItState {
         dispose: (x) => x.subscription!.cancel(),
         observedObject: stream,
         isHandlerWatch: handler != null,
+        parentObject: parentObject,
+        shouldTrace: _logRebuilds || _logHandlers,
       );
       _appendWatch(
         watch,
@@ -260,11 +360,14 @@ class _WatchItState {
           return;
         }
         if (handler != null) {
+          if (_logHandlers) {
+            watch?._logWatchItEvent();
+          }
           handler(_element!, AsyncSnapshot.withData(ConnectionState.active, x),
               watch!.dispose);
         } else {
           watch!.lastValue = AsyncSnapshot.withData(ConnectionState.active, x);
-          _element!.markNeedsBuild();
+          _markNeedsBuild(watch);
         }
       },
       onError: (Object error) {
@@ -275,6 +378,9 @@ class _WatchItState {
           return;
         }
         if (handler != null) {
+          if (_logHandlers) {
+            watch?._logWatchItEvent();
+          }
           handler(
               _element!,
               AsyncSnapshot.withError(ConnectionState.active, error),
@@ -282,7 +388,7 @@ class _WatchItState {
         }
         watch!.lastValue =
             AsyncSnapshot.withError(ConnectionState.active, error);
-        _element!.markNeedsBuild();
+        _markNeedsBuild(watch);
       },
     );
     watch.subscription = subscription;
@@ -298,6 +404,9 @@ class _WatchItState {
         return AsyncSnapshot<R>.nothing();
       }
       if (initialValue != null) {
+        if (_logHandlers) {
+          watch._logWatchItEvent();
+        }
         handler(
             _element!,
             AsyncSnapshot.withData(ConnectionState.waiting, initialValue),
@@ -321,11 +430,13 @@ class _WatchItState {
         handler, {
     bool executeImmediately = false,
     String? instanceName,
+    Object? parentObject,
   }) {
     watchListenable<R>(
       target: target,
       handler: handler,
       executeImmediately: executeImmediately,
+      parentObject: parentObject,
     );
   }
 
@@ -338,12 +449,14 @@ class _WatchItState {
     ) handler, {
     R? initialValue,
     String? instanceName,
+    Object? parentObject,
   }) {
     watchStream<T, R>(
         target: target,
         initialValue: initialValue,
         instanceName: instanceName,
-        handler: handler);
+        handler: handler,
+        parentObject: parentObject);
   }
 
   /// this function is used to implement several others
@@ -371,7 +484,9 @@ class _WatchItState {
       Future<R> Function()? futureProvider,
       String? instanceName,
       bool callHandlerOnlyOnce = false,
-      void Function(R value)? dispose}) {
+      void Function(R value)? dispose,
+      Object? parentObject,
+      bool isCreateOnceAsync = false}) {
     assert(
         futureProvider != null || target != null,
         "if you use ${handler != null ? 'registerFutureHandler' : 'watchFuture'} "
@@ -393,6 +508,9 @@ class _WatchItState {
         if (handler != null &&
             _element != null &&
             (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
+          if (_logHandlers) {
+            watch._logWatchItEvent();
+          }
           handler(_element!, watch.lastValue!, watch.dispose);
           watch.handlerWasCalled = true;
         }
@@ -418,11 +536,14 @@ class _WatchItState {
             if (dispose != null && x.lastValue != null) {
               dispose(x.lastValue!.data as R);
             }
-          });
+          },
+          eventType: isCreateOnceAsync ? WatchItEvent.createOnceAsync : null,
+          parentObject: parentObject,
+          shouldTrace: _logRebuilds || _logHandlers);
       _appendWatch(watch, allowMultipleSubscribers: allowMultipleSubscribers);
     }
     //if no handler was passed we expect that this is a normal watchFuture
-    handler ??= (context, x, cancel) => (context as Element).markNeedsBuild();
+    handler ??= (context, x, cancel) => _markNeedsBuild(watch);
 
     /// in case of a new watch or an changing Future we do the following:
     watch.observedObject = future!;
@@ -447,6 +568,11 @@ class _WatchItState {
           // print('Future completed $x');
           // only update if Future is still valid
           watch.lastValue = AsyncSnapshot.withData(ConnectionState.done, x);
+          if (watch.isHandlerWatch && _logHandlers ||
+              _logRebuilds ||
+              _logHelperFunctions) {
+            watch._logWatchItEvent();
+          }
           handler!(_element!, watch.lastValue!, watch.dispose);
           watch.handlerWasCalled = true;
         }
@@ -462,6 +588,11 @@ class _WatchItState {
           // print('Future error');
           watch.lastValue =
               AsyncSnapshot.withError(ConnectionState.done, error);
+          if (watch.isHandlerWatch && _logHandlers ||
+              _logRebuilds ||
+              _logHelperFunctions) {
+            watch._logWatchItEvent();
+          }
           handler!(_element!, watch.lastValue!, watch.dispose);
           watch.handlerWasCalled = true;
         }
@@ -471,6 +602,11 @@ class _WatchItState {
     watch.lastValue = AsyncSnapshot<R>.withData(
         ConnectionState.waiting, initialValue ?? initialValueProvider.call());
     if (executeImmediately && _element != null) {
+      if (watch.isHandlerWatch && _logHandlers ||
+          _logRebuilds ||
+          _logHelperFunctions) {
+        watch._logWatchItEvent();
+      }
       handler(_element!, watch.lastValue!, watch.dispose);
       watch.handlerWasCalled = true;
     }
@@ -516,8 +652,13 @@ class _WatchItState {
                       return true;
                     }());
                   }),
+        eventType: WatchItEvent.createOnce,
+        shouldTrace: _logRebuilds || _logHandlers,
       );
       _appendWatch(watch);
+    }
+    if (_logHelperFunctions) {
+      watch._logWatchItEvent();
     }
     return watch.lastValue!;
   }
@@ -528,6 +669,7 @@ class _WatchItState {
       allowMultipleSubscribers: false,
       initialValueProvider: () => initialValue,
       futureProvider: factoryFunc,
+      isCreateOnceAsync: true,
       dispose: (x) {
         if (dispose != null) {
           dispose(x);
@@ -553,6 +695,14 @@ class _WatchItState {
       Duration? timeout,
       bool shouldRebuild = true,
       bool callHandlerOnlyOnce = false}) {
+    if (_logHelperFunctions) {
+      watchItLogFunction?.call(
+        sourceLocationOfWatch: _getSourceLocation(),
+        eventType: WatchItEvent.allReady,
+        observedObject: null,
+        parentObject: null,
+      );
+    }
     final readyResult = registerFutureHandler<Object, bool>(
       handler: (context, x, dispose) {
         if (x.hasError) {
@@ -561,7 +711,7 @@ class _WatchItState {
           onReady?.call(context);
         }
         if (shouldRebuild) {
-          (context as Element).markNeedsBuild();
+          _markNeedsBuild(null);
         }
         dispose();
       },
@@ -593,6 +743,14 @@ class _WatchItState {
     String? instanceName,
     bool callHandlerOnlyOnce = false,
   }) {
+    if (_logHelperFunctions) {
+      watchItLogFunction?.call(
+        sourceLocationOfWatch: _getSourceLocation(),
+        eventType: WatchItEvent.isReady,
+        observedObject: null,
+        parentObject: null,
+      );
+    }
     final readyResult = registerFutureHandler<Object, bool>(
       handler: (context, x, cancel) {
         if (x.hasError) {
@@ -600,7 +758,7 @@ class _WatchItState {
         } else {
           onReady?.call(context);
         }
-        (context as Element).markNeedsBuild();
+        _markNeedsBuild(null);
         cancel(); // we want exactly one call.
       },
       allowMultipleSubscribers: false,
@@ -636,6 +794,14 @@ class _WatchItState {
       void Function()? dispose,
       bool isFinal = false}) {
     if (!_scopeWasPushed) {
+      if (_logHelperFunctions) {
+        watchItLogFunction?.call(
+          sourceLocationOfWatch: _getSourceLocation(),
+          eventType: WatchItEvent.scopePush,
+          observedObject: null,
+          parentObject: null,
+        );
+      }
       _scopeName = 'AutoScope: ${_autoScopeCounter++}';
       GetIt.I.pushNewScope(
           dispose: dispose,
@@ -653,6 +819,14 @@ class _WatchItState {
       {void Function()? dispose}) {
     _initDispose = dispose;
     if (!_initWasCalled) {
+      if (_logHelperFunctions) {
+        watchItLogFunction?.call(
+          sourceLocationOfWatch: _getSourceLocation(),
+          eventType: WatchItEvent.callOnce,
+          observedObject: null,
+          parentObject: null,
+        );
+      }
       init(_element!);
       _initWasCalled = true;
     }
@@ -661,10 +835,26 @@ class _WatchItState {
   void Function()? _disposeFunction;
   void onDispose(void Function() dispose) {
     _disposeFunction ??= dispose;
+    if (_logHelperFunctions) {
+      watchItLogFunction?.call(
+        sourceLocationOfWatch: _getSourceLocation(),
+        eventType: WatchItEvent.onDispose,
+        observedObject: null,
+        parentObject: null,
+      );
+    }
   }
 
   bool? rebuildOnScopeChanges() {
     final result = onScopeChanged!.value;
+    if (_logHelperFunctions && result != null) {
+      watchItLogFunction?.call(
+        sourceLocationOfWatch: _getSourceLocation(),
+        eventType: WatchItEvent.scopeChange,
+        observedObject: onScopeChanged,
+        parentObject: null,
+      );
+    }
     watchListenable(target: onScopeChanged!);
     onScopeChanged!.value = null;
     return result;

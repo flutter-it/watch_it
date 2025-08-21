@@ -9,11 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  http: ^0.13.0
-  flutter_command: ^7.0.1
+  http: ^1.5.0
+  command_it: ^8.0.0
   watch_it:
     path: ../
-  functional_listener: any
+  listen_it: ^5.0.0
 
 flutter:
   uses-material-design: true

@@ -1,26 +1,26 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter_command/flutter_command.dart';
+import 'package:command_it/command_it.dart';
 import 'package:http/http.dart' as http;
 
 import 'json/weather_in_cities.dart';
 
 class WeatherManager {
   late Command<String?, List<WeatherEntry>> updateWeatherCommand;
-  late Command<bool, bool> setExecutionStateCommand;
+  late Command<bool, bool> setRestrictionStateCommand;
   late Command<String, String> textChangedCommand;
 
   WeatherManager() {
     // Command expects a bool value when executed and sets it as its own value
-    setExecutionStateCommand =
-        Command.createSync<bool, bool>((b) => b, initialValue: true);
+    setRestrictionStateCommand =
+        Command.createSync<bool, bool>((b) => b, initialValue: false);
 
     // We pass the result of switchChangedCommand as restrictions to the upDateWeatherCommand
     updateWeatherCommand = Command.createAsync<String?, List<WeatherEntry>>(
       update, // Wrapped function
       initialValue: [], // Initial value
-      restriction: setExecutionStateCommand,
+      restriction: setRestrictionStateCommand,
     );
 
     // Will be called on every change of the search-field

@@ -29,8 +29,8 @@ class _HomePageState extends State<HomePage> {
         watch(di<WeatherManager>().updateWeatherCommand.isExecuting).value;
     final updateButtonEnabled =
         watchValue((WeatherManager x) => x.updateWeatherCommand.canExecute);
-    final switchValue =
-        watchValue((WeatherManager x) => x.setExecutionStateCommand);
+    final updateDisabled =
+        watchValue((WeatherManager x) => x.setRestrictionStateCommand);
 
     return Scaffold(
       appBar: AppBar(title: Text("WeatherDemo")),
@@ -85,8 +85,9 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 Switch(
-                  value: switchValue,
-                  onChanged: di<WeatherManager>().setExecutionStateCommand,
+                  value: !updateDisabled,
+                  onChanged: (enabled) =>
+                      di<WeatherManager>().setRestrictionStateCommand(!enabled),
                 ),
               ],
             ),

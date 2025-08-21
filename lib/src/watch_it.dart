@@ -8,6 +8,7 @@ import 'package:get_it/get_it.dart';
 part 'elements.dart';
 part 'mixins.dart';
 part 'watch_it_state.dart';
+part 'watch_it_tracing.dart';
 part 'widgets.dart';
 
 /// WatchIt exports the default instance of get_it as a global variable which lets
@@ -101,8 +102,10 @@ T watchIt<T extends Listenable>({String? instanceName, GetIt? getIt}) {
   assert(_activeWatchItState != null,
       'watchIt can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   final getItInstance = getIt ?? di;
-  final observedObject = getItInstance<T>(instanceName: instanceName);
-  _activeWatchItState!.watchListenable(target: observedObject);
+  final parentObject = getItInstance<T>(instanceName: instanceName);
+  final observedObject = parentObject;
+  _activeWatchItState!
+      .watchListenable(target: observedObject, parentObject: parentObject);
   return observedObject;
 }
 
@@ -129,8 +132,10 @@ R watchValue<T extends Object, R>(
       'watchValue can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   ValueListenable<R> observedObject;
   final getItInstance = getIt ?? di;
-  observedObject = selectProperty(getItInstance<T>(instanceName: instanceName));
-  _activeWatchItState!.watchListenable(target: observedObject);
+  final parentObject = getItInstance<T>(instanceName: instanceName);
+  observedObject = selectProperty(parentObject);
+  _activeWatchItState!
+      .watchListenable(target: observedObject, parentObject: parentObject);
   return observedObject.value;
 }
 
@@ -171,7 +176,10 @@ R watchPropertyValue<T extends Listenable, R>(
       'selectProperty returns a Listenable. Use watchIt instead');
   observedObject = parentObject;
   _activeWatchItState!.watchPropertyValue<T, R>(
-      listenable: observedObject, only: selectProperty);
+    listenable: observedObject,
+    only: selectProperty,
+    parentObject: parentObject,
+  );
   return observedProperty;
 }
 
@@ -222,7 +230,8 @@ AsyncSnapshot<R> watchStream<T extends Object, R>(
       target: observedObject,
       initialValue: initialValue,
       instanceName: instanceName,
-      preserveState: preserveState);
+      preserveState: preserveState,
+      parentObject: parentObject);
 }
 
 /// [watchFuture] observes the `Future` returned by [select] and triggers a rebuild as soon
@@ -275,7 +284,8 @@ AsyncSnapshot<R> watchFuture<T extends Object, R>(
       initialValueProvider: () => initialValue,
       instanceName: instanceName,
       preserveState: preserveState,
-      allowMultipleSubscribers: false);
+      allowMultipleSubscribers: false,
+      parentObject: parentObject);
 }
 
 /// [registerHandler] registers a [handler] function for a `ValueListenable`
@@ -321,8 +331,13 @@ void registerHandler<T extends Object, R>({
           'Either the return type of the select function or the type T has to be a Listenable');
     }
   }
-  _activeWatchItState!.registerHandler<T, R>(observedObject, handler,
-      instanceName: instanceName, executeImmediately: executeImmediately);
+  _activeWatchItState!.registerHandler<T, R>(
+    observedObject,
+    handler,
+    instanceName: instanceName,
+    executeImmediately: executeImmediately,
+    parentObject: parentObject,
+  );
 }
 
 /// [registerChangeNotifierHandler] registers a [handler] function for a `ChangeNotifier`
@@ -358,7 +373,9 @@ void registerChangeNotifierHandler<T extends ChangeNotifier>({
   observedObject = parentObject;
 
   _activeWatchItState!.registerHandler<T, T>(observedObject, handler,
-      instanceName: instanceName, executeImmediately: executeImmediately);
+      instanceName: instanceName,
+      executeImmediately: executeImmediately,
+      parentObject: parentObject);
 }
 
 /// [registerStreamHandler] registers a [handler] function for a `Stream` exactly
@@ -405,7 +422,9 @@ void registerStreamHandler<T extends Object, R>({
     }
   }
   _activeWatchItState!.registerStreamHandler(observedObject, handler,
-      initialValue: initialValue, instanceName: instanceName);
+      initialValue: initialValue,
+      instanceName: instanceName,
+      parentObject: parentObject);
 }
 
 /// [registerFutureHandler] registers a [handler] function for a `Future` exactly
@@ -464,7 +483,8 @@ void registerFutureHandler<T extends Object, R>({
       initialValueProvider: () => initialValue,
       instanceName: instanceName,
       allowMultipleSubscribers: true,
-      callHandlerOnlyOnce: callHandlerOnlyOnce);
+      callHandlerOnlyOnce: callHandlerOnlyOnce,
+      parentObject: parentObject);
 }
 
 /// returns `true` if all registered async or dependent objects are ready
@@ -621,4 +641,28 @@ AsyncSnapshot<T> createOnceAsync<T>(Future<T> Function() factoryFunc,
       ' WatchingWidget or a widget using the WatchItMixin');
   return _activeWatchItState!.createOnceAsync(factoryFunc,
       initialValue: initialValue, dispose: dispose);
+}
+
+/// enable tracing for the current build function has to be called before
+/// any other watch_it functions in the same build function
+/// If both [logRebuilds] and [logHandlers] are true then both will be logged
+/// if you want to enable tracing for the complete subtree you can wrap the widget
+/// that you want to trace including its child widgets with
+/// [WatchItSubTreeTraceControl]
+/// ```dart
+/// WatchItSubTreeTraceControl(
+///   logRebuilds: true,
+///   logHandlers: true,
+///   child: ...
+/// )
+void enableTracing({
+  bool logRebuilds = true,
+  bool logHandlers = true,
+}) {
+  assert(_activeWatchItState != null,
+      'enableTracing can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
+  _activeWatchItState!.enableTracing(
+    logHandlers: logHandlers,
+    logRebuilds: logRebuilds,
+  );
 }

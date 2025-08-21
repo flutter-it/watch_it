@@ -1,3 +1,4 @@
+## 1.7.0 - adding powerful tracing and logging so you can understand why and when your UI rebuilds
 ## 1.6.5 - 11.03.2025
 * PR by @timmaffett imrproving the markdown of the readme
 * adding topics to pubspec

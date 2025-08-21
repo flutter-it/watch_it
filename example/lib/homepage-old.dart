@@ -114,12 +114,12 @@ class _HomePageState extends State<HomePage> {
                 ),
                 ValueListenableBuilder<bool>(
                     valueListenable:
-                        GetIt.I<WeatherManager>().setExecutionStateCommand,
+                        GetIt.I<WeatherManager>().setRestrictionStateCommand,
                     builder: (context, value, _) {
                       return Switch(
                         value: value,
-                        onChanged:
-                            GetIt.I<WeatherManager>().setExecutionStateCommand,
+                        onChanged: GetIt.I<WeatherManager>()
+                            .setRestrictionStateCommand,
                       );
                     })
               ],

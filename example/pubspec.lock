@@ -33,21 +33,21 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  command_it:
+    dependency: "direct main"
+    description:
+      name: command_it
+      sha256: c2a658f52219bb082e283b4177870e8875bf056aaeb8d2737e20e285647fcf21
+      url: "https://pub.dev"
+    source: hosted
+    version: "8.0.0"
   flutter:
     dependency: "direct main"
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_command:
-    dependency: "direct main"
-    description:
-      name: flutter_command
-      sha256: "8c23c9f39b5521f64b4bf15b7b5693091e7757806189f356b048658952cc9e1a"
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.1"
   functional_listener:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: functional_listener
       sha256: c096db771b4ce7ba0f886cc4a761044b11e8276a7bc24cfc812dc4b2bc6f5b16
@@ -66,10 +66,10 @@ packages:
     dependency: "direct main"
     description:
       name: http
-      sha256: "5895291c13fa8a3bd82e76d5627f69e0d85ca6a30dcac95c4ea19a5d555879c2"
+      sha256: bb2ce4590bc2667c96f318d68cac1b5a7987ec819351d32b1c987239a815e007
       url: "https://pub.dev"
     source: hosted
-    version: "0.13.6"
+    version: "1.5.0"
   http_parser:
     dependency: transitive
     description:
@@ -78,6 +78,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.2"
+  listen_it:
+    dependency: "direct main"
+    description:
+      name: listen_it
+      sha256: dca2c41f8b2b133352bc439f7cf7b8a8c61d5f4c6de60fe13dbd2f1002f8a972
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.0"
   matcher:
     dependency: transitive
     description:
@@ -193,7 +201,15 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "1.6.4"
+    version: "1.6.5"
+  web:
+    dependency: transitive
+    description:
+      name: web
+      sha256: "868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
 sdks:
   dart: ">=3.7.0-0 <4.0.0"
   flutter: ">=3.0.0"

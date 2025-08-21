@@ -1,6 +1,10 @@
 
 [:heart: Sponsor](https://github.com/sponsors/escamoteur) <a href="https://www.buymeacoffee.com/escamoteur" target="_blank"><img align="right" src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
+
+>Visit our new documentation site https://flutter-it.dev
+
+
 # watch_it
 
 A simple state management solution powered by get_it.
@@ -501,6 +505,245 @@ Some people don't like mixins so `WatchIt` offers two Widgets that can be used i
 
 * `WatchingWidget` - can be used instead of `StatelessWidget`
 * `WatchingStatefulWidget` - instead of `StatefulWidget`
+
+
+# Tracing and Debugging
+
+`WatchIt` provides comprehensive tracing and debugging capabilities to help you understand what's happening in your reactive widgets. This feature allows you to monitor rebuilds, handler calls, and other watch_it events in real-time.
+
+## Basic Tracing
+
+You can enable tracing for individual widgets using the `enableTracing()` function:
+
+```dart
+class MyWidget extends StatelessWidget with WatchItMixin {
+  @override
+  Widget build(BuildContext context) {
+    // Enable tracing for this widget (must be called before any watch functions)
+    enableTracing(logRebuilds: true, logHandlers: true);
+    
+    final user = watchIt<UserModel>();
+    final userName = watchPropertyValue((UserModel m) => m.name);
+    
+    return Text(userName);
+  }
+}
+```
+
+This will log all rebuilds and handler calls for this specific widget to the console.
+
+## Global Subtree Tracing
+
+For more comprehensive tracing, you can enable global subtree tracing and use the `WatchItSubTreeTraceControl` widget:
+
+```dart
+// Enable global subtree tracing
+enableSubTreeTracing = true;
+
+
+// Wrap your app or specific subtrees with WatchItSubTreeTraceControl
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return WatchItSubTreeTraceControl(
+      logRebuilds: true,
+      logHandlers: true,
+      logHelperFunctions: true,
+      child: MaterialApp(
+        home: MyHomePage(),
+      ),
+    );
+  }
+}
+```
+
+This will trace all `WatchIt` events for all widgets in the subtree, even if they don't explicitly call `enableTracing()`.
+You can even disable the logging for certain subtrees further down the tree by adding another `WatchItSubTreeTraceControl`.
+
+> For performance reasons WatchingWidgets only looks for an `WatchItSubTreeTraceControl` if you set `enableSubTreeTracing=true`
+
+
+## Default logging
+
+The default logger will provide you with logs like this
+
+```
+WatchIt: Rebuild was triggered at
+	 #5      _HomePageState.build (package:flutter_weather_demo/homepage.dart:31:9) 
+homepage.dart:31
+	 by CombiningValueNotifier<bool, bool, bool> in WeatherManager
+flutter: 
+WatchIt: Rebuild was triggered at
+	 #5      WeatherListView.build (package:flutter_weather_demo/listview.dart:9:18) 
+listview.dart:9
+	 by CommandAsync<String?, List<WeatherEntry>> in WeatherManager
+flutter: 
+WatchIt: Rebuild was triggered at
+	 #5      _HomePageState.build (package:flutter_weather_demo/homepage.dart:29:9) 
+homepage.dart:29
+	 by CustomValueNotifier<bool>
+flutter: 
+WatchIt: Rebuild was triggered at
+	 #5      _HomePageState.build (package:flutter_weather_demo/homepage.dart:31:9) 
+homepage.dart:31
+	 by CombiningValueNotifier<bool, bool, bool> in WeatherManager
+flutter: 
+WatchIt: Rebuild was triggered at
+	 #5      _HomePageState.build (package:flutter_weather_demo/homepage.dart:33:9) 
+homepage.dart:33
+	 by CommandSync<bool, bool> in WeatherManager
+```
+
+## Custom Logging
+
+You can override the default logging behavior by providing your own logging function:
+
+```dart
+// Define a custom logging function
+void myCustomLogger({
+  String? sourceLocationOfWatch,
+  required WatchItEvent eventType,
+  Object? observedObject,
+  Object? parentObject,
+  Object? lastValue,
+}) {
+  // Log to your preferred system (e.g., Firebase Analytics, Sentry, etc.)
+  print('Custom Log: $eventType at $sourceLocationOfWatch');
+  
+  // Or send to external logging service
+  // analyticsService.logEvent('watch_it_event', {
+  //   'event_type': eventType.toString(),
+  //   'location': sourceLocationOfWatch,
+  //   'observed_object': observedObject?.runtimeType.toString(),
+  // });
+}
+
+// Assign your custom logger
+watchItLogFunction = myCustomLogger;
+```
+
+## Event Types
+
+The tracing system categorizes events into different types:
+
+- **`WatchItEvent.rebuild`**: Widget rebuilds triggered by data changes
+- **`WatchItEvent.handler`**: Handler functions called for data changes
+- **`WatchItEvent.createOnce`**: Objects created with `createOnce()`
+- **`WatchItEvent.createOnceAsync`**: Objects created with `createOnceAsync()`
+- **`WatchItEvent.allReady`**: `allReady()` checks performed
+- **`WatchItEvent.isReady`**: `isReady()` checks performed
+- **`WatchItEvent.scopePush`**: New GetIt scopes pushed
+- **`WatchItEvent.callOnce`**: `callOnce()` functions executed
+- **`WatchItEvent.onDispose`**: `onDispose()` functions called
+- **`WatchItEvent.scopeChange`**: GetIt scope changes detected
+
+## Advanced Usage
+
+### Selective Tracing
+
+You can enable different types of tracing for different parts of your app:
+
+```dart
+// Enable only rebuild tracing for a specific subtree
+WatchItSubTreeTraceControl(
+  logRebuilds: true,
+  logHandlers: false,
+  logHelperFunctions: false,
+  child: MyWidget(),
+)
+
+// Enable only handler tracing for another subtree
+WatchItSubTreeTraceControl(
+  logRebuilds: false,
+  logHandlers: true,
+  logHelperFunctions: false,
+  child: AnotherWidget(),
+)
+```
+
+### Integration with External Services
+
+The tracing system is designed to integrate easily with external logging and analytics services:
+
+```dart
+// Example: Integration with Firebase Analytics
+void firebaseAnalyticsLogger({
+  String? sourceLocationOfWatch,
+  required WatchItEvent eventType,
+  Object? observedObject,
+  Object? parentObject,
+  Object? lastValue,
+}) {
+  FirebaseAnalytics.instance.logEvent(
+    name: 'watch_it_event',
+    parameters: {
+      'event_type': eventType.toString(),
+      'location': sourceLocationOfWatch ?? 'unknown',
+      'observed_object': observedObject?.runtimeType.toString(),
+      'parent_object': parentObject?.runtimeType.toString(),
+    },
+  );
+}
+
+// Example: Integration with Sentry
+void sentryLogger({
+  String? sourceLocationOfWatch,
+  required WatchItEvent eventType,
+  Object? observedObject,
+  Object? parentObject,
+  Object? lastValue,
+}) {
+  Sentry.addBreadcrumb(
+    Breadcrumb(
+      message: 'WatchIt Event: $eventType',
+      category: 'watch_it',
+      data: {
+        'location': sourceLocationOfWatch,
+        'observed_object': observedObject?.runtimeType.toString(),
+      },
+    ),
+  );
+}
+```
+
+### Performance Monitoring
+
+You can use the tracing system to monitor performance and identify potential issues:
+
+```dart
+void performanceLogger({
+  String? sourceLocationOfWatch,
+  required WatchItEvent eventType,
+  Object? observedObject,
+  Object? parentObject,
+  Object? lastValue,
+}) {
+  final timestamp = DateTime.now();
+  
+  // Track frequency of rebuilds
+  if (eventType == WatchItEvent.rebuild) {
+    _rebuildCount++;
+    if (_rebuildCount > 10) {
+      print('Warning: High rebuild frequency detected at $sourceLocationOfWatch');
+    }
+  }
+  
+  // Log performance metrics
+  print('Performance: $eventType took ${timestamp.difference(_lastEvent).inMilliseconds}ms');
+  _lastEvent = timestamp;
+}
+```
+
+## Best Practices
+
+1. **Use tracing in development**: Enable tracing during development to understand your widget behavior
+2. **Disable in production**: Consider disabling or using minimal tracing in production builds
+3. **Be selective**: Use subtree tracing to focus on specific areas of your app
+4. **Custom logging**: Implement custom logging to integrate with your existing monitoring systems
+5. **Performance awareness**: Monitor rebuild frequency to identify potential performance issues
+
+The tracing system provides powerful insights into your reactive widgets, helping you debug issues, optimize performance, and understand the flow of data through your application.
+
 
 # Lifting the magic curtain
 

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_weather_demo/weather_manager.dart';
-import 'package:get_it/get_it.dart';
+import 'package:watch_it/watch_it.dart';
 
 import 'homepage.dart';
 
 void main() {
   registerManager();
   runApp(MyApp());
+  enableSubTreeTracing = true;
 }
 
 class MyApp extends StatelessWidget {
@@ -14,7 +15,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      home: HomePage(),
+      home: WatchItSubTreeTraceControl(
+        logRebuilds: true,
+        logHandlers: true,
+        logHelperFunctions: true,
+        child: HomePage(),
+      ),
     );
   }
 }
