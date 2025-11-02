@@ -64,6 +64,7 @@ void _defaultWatchItLogFunction({
   final eventTypeString = _getEventTypeString(eventType);
   final message =
       '\nWatchIt: $eventTypeString at\n\t $location \n\t by ${observedObject?.runtimeType}${parentObject != null ? ' in ${parentObject.runtimeType}' : ''}';
+  // ignore: avoid_print
   print(message);
 }
 

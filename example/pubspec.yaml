@@ -13,7 +13,7 @@ dependencies:
   command_it: ^8.0.0
   watch_it:
     path: ../
-  listen_it: ^5.0.0
+  listen_it: ^5.1.0
 
 flutter:
   uses-material-design: true

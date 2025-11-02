@@ -16,10 +16,10 @@ topics:
   - get-it
 
 dependencies:
-  get_it: ^8.0.0
+  get_it: ^8.3.0
+  listen_it: ^5.1.0
   flutter:
     sdk: flutter
-  functional_listener: ^4.0.0
 
 dev_dependencies:
   flutter_test:

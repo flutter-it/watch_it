@@ -809,8 +809,7 @@ class _WatchItState {
         parentObject: null,
       );
     }
-    final readyResult = 
-registerFutureHandler<Object?, bool>(
+    final readyResult = registerFutureHandler<Object?, bool>(
       parentOrFuture: null,
       handler: (context, x, dispose) {
         if (x.hasError) {
@@ -859,8 +858,7 @@ registerFutureHandler<Object?, bool>(
         parentObject: null,
       );
     }
-    final readyResult = 
-registerFutureHandler<Object?, bool>(
+    final readyResult = registerFutureHandler<Object?, bool>(
       parentOrFuture: null,
       handler: (context, x, cancel) {
         if (x.hasError) {

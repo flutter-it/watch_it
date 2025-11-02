@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_weather_demo/weather_manager.dart';
-import 'package:functional_listener/functional_listener.dart';
 import 'package:get_it/get_it.dart';
+import 'package:listen_it/listen_it.dart';
 
 import 'listview.dart';
 

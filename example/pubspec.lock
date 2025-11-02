@@ -46,22 +46,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  functional_listener:
-    dependency: transitive
-    description:
-      name: functional_listener
-      sha256: c096db771b4ce7ba0f886cc4a761044b11e8276a7bc24cfc812dc4b2bc6f5b16
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.1.0"
   get_it:
     dependency: transitive
     description:
       name: get_it
-      sha256: ff97e5e7b2e82e63c82f5658c6ba2605ea831f0f7489b0d2fb255d817ec4eb5e
+      sha256: ae78de7c3f2304b8d81f2bb6e320833e5e81de942188542328f074978cc0efa9
       url: "https://pub.dev"
     source: hosted
-    version: "8.0.0"
+    version: "8.3.0"
   http:
     dependency: "direct main"
     description:
@@ -82,10 +74,10 @@ packages:
     dependency: "direct main"
     description:
       name: listen_it
-      sha256: dca2c41f8b2b133352bc439f7cf7b8a8c61d5f4c6de60fe13dbd2f1002f8a972
+      sha256: "65e094a9314e4734b349053a77edc5c1bdd5244b7066e1718cf9b232c3dfb5d5"
       url: "https://pub.dev"
     source: hosted
-    version: "5.0.0"
+    version: "5.1.0"
   matcher:
     dependency: transitive
     description:
@@ -191,17 +183,17 @@ packages:
     dependency: transitive
     description:
       name: vector_math
-      sha256: "80b3257d1492ce4d091729e3a67a60407d227c27241d6927be0130c98e741803"
+      sha256: d530bd74fea330e6e364cda7a85019c434070188383e1cd8d9777ee586914c5b
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.4"
+    version: "2.2.0"
   watch_it:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "1.6.5"
+    version: "1.7.0"
   web:
     dependency: transitive
     description:
@@ -211,5 +203,5 @@ packages:
     source: hosted
     version: "1.1.1"
 sdks:
-  dart: ">=3.7.0-0 <4.0.0"
+  dart: ">=3.8.0-0 <4.0.0"
   flutter: ">=3.0.0"
