@@ -88,7 +88,7 @@ T watch<T extends Listenable>(T target) {
   assert(_activeWatchItState != null,
       'watch can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
-  _activeWatchItState!.watchListenable(target: target);
+  _activeWatchItState!.watchListenable(parentObject: target);
   return target;
 }
 
@@ -103,10 +103,8 @@ T watchIt<T extends Listenable>({String? instanceName, GetIt? getIt}) {
       'watchIt can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   final getItInstance = getIt ?? di;
   final parentObject = getItInstance<T>(instanceName: instanceName);
-  final observedObject = parentObject;
-  _activeWatchItState!
-      .watchListenable(target: observedObject, parentObject: parentObject);
-  return observedObject;
+  _activeWatchItState!.watchListenable(parentObject: parentObject);
+  return parentObject;
 }
 
 /// [watchValue] observes a ValueListenable property of an object registered in get_it
@@ -119,24 +117,35 @@ T watchIt<T extends Listenable>({String? instanceName, GetIt? getIt}) {
 /// it even more expressively like this:
 /// `final userName = watchValue((UserManager user) => user.userName);`
 ///
+/// [allowObservableChange] determines whether the observable can change between builds.
+/// When `false` (default), the selector is only called once on the first build,
+/// and any observable change will throw an exception. This is optimal for static
+/// observables and prevents memory leaks from inline chain creation.
+/// Set to `true` when you need to switch between different observables based on
+/// build-time state.
+///
 /// [instanceName] is the optional name of the instance if you registered it
 /// with a name in get_it.
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
 R watchValue<T extends Object, R>(
   ValueListenable<R> Function(T) selectProperty, {
+  bool allowObservableChange = false,
   String? instanceName,
   GetIt? getIt,
 }) {
   assert(_activeWatchItState != null,
       'watchValue can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  ValueListenable<R> observedObject;
   final getItInstance = getIt ?? di;
   final parentObject = getItInstance<T>(instanceName: instanceName);
-  observedObject = selectProperty(parentObject);
-  _activeWatchItState!
-      .watchListenable(target: observedObject, parentObject: parentObject);
-  return observedObject.value;
+  final observedObject = _activeWatchItState!.watchListenable<R>(
+    parentObject: parentObject,
+    selector: selectProperty,
+    allowObservableChange: allowObservableChange,
+  );
+
+  // Get the value from the returned observable (selector only called once!)
+  return (observedObject as ValueListenable<R>).value;
 }
 
 /// [watchPropertyValue] allows you to observe a property of a Listenable object and trigger a rebuild
@@ -300,6 +309,14 @@ AsyncSnapshot<R> watchFuture<T extends Object, R>(
 /// If you want to register a handler to a Listenable that is not registered in get_it you can
 /// pass it as [target].
 /// if you pass null as [select], T or [target] has to be a Listenable or ValueListenable.
+///
+/// [allowObservableChange] determines whether the observable can change between builds.
+/// When `false` (default), the selector is only called once on the first build,
+/// and any observable change will throw an exception. This is optimal for static
+/// observables and prevents memory leaks from inline chain creation.
+/// Set to `true` when you need to switch between different observables based on
+/// build-time state.
+///
 /// [instanceName] is the optional name of the instance if you registered it
 /// with a name in get_it.
 ///
@@ -311,32 +328,23 @@ void registerHandler<T extends Object, R>({
           BuildContext context, R newValue, void Function() cancel)
       handler,
   T? target,
+  bool allowObservableChange = false,
   bool executeImmediately = false,
   String? instanceName,
   GetIt? getIt,
 }) {
   assert(_activeWatchItState != null,
       'registerHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  Listenable? observedObject;
 
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
-  if (select != null) {
-    observedObject = select(parentObject);
-  } else {
-    try {
-      observedObject = (parentObject) as Listenable;
-    } on TypeError catch (_) {
-      throw ArgumentError(
-          'Either the return type of the select function or the type T has to be a Listenable');
-    }
-  }
-  _activeWatchItState!.registerHandler<T, R>(
-    observedObject,
-    handler,
-    instanceName: instanceName,
-    executeImmediately: executeImmediately,
+
+  _activeWatchItState!.watchListenable<R>(
     parentObject: parentObject,
+    selector: select,
+    allowObservableChange: allowObservableChange,
+    handler: handler,
+    executeImmediately: executeImmediately,
   );
 }
 
@@ -365,17 +373,15 @@ void registerChangeNotifierHandler<T extends ChangeNotifier>({
 }) {
   assert(_activeWatchItState != null,
       'registerHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  Listenable? observedObject;
 
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
 
-  observedObject = parentObject;
-
-  _activeWatchItState!.registerHandler<T, T>(observedObject, handler,
-      instanceName: instanceName,
-      executeImmediately: executeImmediately,
-      parentObject: parentObject);
+  _activeWatchItState!.watchListenable<T>(
+    parentObject: parentObject,
+    handler: handler,
+    executeImmediately: executeImmediately,
+  );
 }
 
 /// [registerStreamHandler] registers a [handler] function for a `Stream` exactly

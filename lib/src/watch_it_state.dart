@@ -175,27 +175,98 @@ class _WatchItState {
   }
 
   /// [handler] and [executeImmediately] are used by [registerHandler]
-  void watchListenable<R>({
-    required Listenable target,
+  /// Returns the observable being watched
+  Listenable watchListenable<R>({
+    required Object parentObject,
+    Function? selector,
+    bool allowObservableChange = true,
     void Function(BuildContext context, R newValue, void Function() dispose)?
         handler,
     bool executeImmediately = false,
-    Type? parentObjectType,
-    Object? parentObject,
   }) {
     var watch = _getWatch() as _WatchEntry<Listenable, R>?;
 
+    Listenable actualTarget;
+
     if (watch != null) {
-      if (target == watch.observedObject) {
-        return;
-      } else {
-        /// select returned a different value than the last time
-        /// so we have to unregister out handler and subscribe anew
-        watch.dispose();
+      if (!allowObservableChange && selector != null) {
+        // FAST PATH: Don't call selector, reuse cached observable
+        return watch.observedObject;
       }
+
+      // Get the observable
+      if (selector != null) {
+        final result = selector(parentObject);
+        // TODO: Check if we can replace this with a static type check
+        assert(() {
+          if (result is! Listenable) {
+            throw ArgumentError('Selector must return a Listenable. '
+                'Got: ${result.runtimeType}');
+          }
+          return true;
+        }());
+        actualTarget = result as Listenable;
+      } else {
+        // No selector - parentObject must be the Listenable
+        assert(() {
+          if (parentObject is! Listenable) {
+            throw ArgumentError(
+                'parentObject must be a Listenable when selector is null. '
+                'Got: ${parentObject.runtimeType}');
+          }
+          return true;
+        }());
+        actualTarget = parentObject as Listenable;
+      }
+
+      if (actualTarget == watch.observedObject) {
+        return watch.observedObject;
+      }
+
+      // Observable changed
+      if (!allowObservableChange) {
+        throw StateError(
+            'watchListenable detected an observable change but allowObservableChange is false.\n'
+            '\n'
+            'This means you are either:\n'
+            '1. Creating a new observable on every build (e.g., listenable.map(...))\n'
+            '2. Dynamically switching observables (e.g., condition ? obsA : obsB)\n'
+            '\n'
+            'Solutions:\n'
+            '1. Store the observable in your model/widget to use the same instance\n'
+            '2. Set allowObservableChange: true to explicitly allow switching\n'
+            '\n'
+            'Observable type: ${actualTarget.runtimeType}\n'
+            'Widget: ${_element?.widget.runtimeType}\n');
+      }
+      watch.dispose();
     } else {
+      // First build - get the observable
+      if (selector != null) {
+        final result = selector(parentObject);
+        // TODO: Check if we can replace this with a static type check
+        assert(() {
+          if (result is! Listenable) {
+            throw ArgumentError('Selector must return a Listenable. '
+                'Got: ${result.runtimeType}');
+          }
+          return true;
+        }());
+        actualTarget = result as Listenable;
+      } else {
+        assert(() {
+          if (parentObject is! Listenable) {
+            throw ArgumentError(
+                'parentObject must be a Listenable when selector is null. '
+                'Got: ${parentObject.runtimeType}');
+          }
+          return true;
+        }());
+        actualTarget = parentObject as Listenable;
+      }
+
       watch = _WatchEntry(
-        observedObject: target,
+        observedObject: actualTarget,
         dispose: (x) => x.observedObject!.removeListener(
           x.notificationHandler!,
         ),
@@ -215,44 +286,45 @@ class _WatchItState {
         return;
       }
       if (handler != null) {
-        if (target is ValueListenable) {
+        if (actualTarget is ValueListenable) {
           if (_logHandlers) {
             watch?._logWatchItEvent();
           }
-          handler(_element!, target.value, watch!.dispose);
+          handler(_element!, actualTarget.value, watch!.dispose);
         } else {
           if (_logHandlers) {
             watch?._logWatchItEvent();
           }
-          handler(_element!, target as R, watch!.dispose);
+          handler(_element!, actualTarget as R, watch!.dispose);
         }
       } else {
         _markNeedsBuild(watch);
       }
     };
     watch.notificationHandler = internalHandler;
-    watch.observedObject = target;
+    watch.observedObject = actualTarget;
 
-    target.addListener(internalHandler);
+    actualTarget.addListener(internalHandler);
     if (handler != null && executeImmediately) {
       if (_element == null) {
         /// it seems it can happen that a handler is still
         /// registered even after dispose was called
         /// to protect against this we just
-        return;
+        return actualTarget;
       }
-      if (target is ValueListenable) {
+      if (actualTarget is ValueListenable) {
         if (_logHandlers) {
           watch._logWatchItEvent();
         }
-        handler(_element!, target.value, watch.dispose);
+        handler(_element!, actualTarget.value, watch.dispose);
       } else {
         if (_logHandlers) {
           watch._logWatchItEvent();
         }
-        handler(_element!, target as R, watch.dispose);
+        handler(_element!, actualTarget as R, watch.dispose);
       }
     }
+    return actualTarget;
   }
 
   watchPropertyValue<T extends Listenable, R>({
@@ -422,22 +494,6 @@ class _WatchItState {
 
     return AsyncSnapshot<R>.withData(
         watch.lastValue!.connectionState, watch.lastValue!.data as R);
-  }
-
-  void registerHandler<T extends Object, R>(
-    Listenable target,
-    void Function(BuildContext context, R newValue, void Function() dispose)
-        handler, {
-    bool executeImmediately = false,
-    String? instanceName,
-    Object? parentObject,
-  }) {
-    watchListenable<R>(
-      target: target,
-      handler: handler,
-      executeImmediately: executeImmediately,
-      parentObject: parentObject,
-    );
   }
 
   void registerStreamHandler<T extends Stream<R>, R>(
@@ -855,7 +911,7 @@ class _WatchItState {
         parentObject: null,
       );
     }
-    watchListenable(target: onScopeChanged!);
+    watchListenable(parentObject: onScopeChanged!);
     onScopeChanged!.value = null;
     return result;
   }
