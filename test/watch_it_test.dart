@@ -20,7 +20,7 @@ class TestDisposable {
   }
 }
 
-final testCompleter = Completer<void>();
+late Completer<void> testCompleter;
 
 class Model extends ChangeNotifier {
   String? constantValue;
@@ -261,6 +261,7 @@ void main() {
     disposeCount = 0;
     lifetimeValueCount = 0;
     lifetimeValueDisposeCount = 0;
+    testCompleter = Completer<void>();
     await GetIt.I.reset();
     valNotifier = ValueNotifier<String>('notifierVal');
     theModel = Model(
