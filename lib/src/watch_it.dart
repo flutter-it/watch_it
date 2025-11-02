@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:functional_listener/functional_listener.dart';
 import 'package:get_it/get_it.dart';
+import 'package:listen_it/listen_it.dart';
 
 part 'elements.dart';
 part 'mixins.dart';
@@ -88,7 +88,7 @@ T watch<T extends Listenable>(T target) {
   assert(_activeWatchItState != null,
       'watch can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
-  _activeWatchItState!.watchListenable(parentObject: target);
+  _activeWatchItState!.watchListenable(parentOrListenable: target);
   return target;
 }
 
@@ -103,7 +103,7 @@ T watchIt<T extends Listenable>({String? instanceName, GetIt? getIt}) {
       'watchIt can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   final getItInstance = getIt ?? di;
   final parentObject = getItInstance<T>(instanceName: instanceName);
-  _activeWatchItState!.watchListenable(parentObject: parentObject);
+  _activeWatchItState!.watchListenable(parentOrListenable: parentObject);
   return parentObject;
 }
 
@@ -138,8 +138,8 @@ R watchValue<T extends Object, R>(
       'watchValue can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   final getItInstance = getIt ?? di;
   final parentObject = getItInstance<T>(instanceName: instanceName);
-  final observedObject = _activeWatchItState!.watchListenable<R>(
-    parentObject: parentObject,
+  final observedObject = _activeWatchItState!.watchListenable<T, R>(
+    parentOrListenable: parentObject,
     selector: selectProperty,
     allowObservableChange: allowObservableChange,
   );
@@ -216,31 +216,30 @@ AsyncSnapshot<R> watchStream<T extends Object, R>(
   T? target,
   R? initialValue,
   bool preserveState = true,
+  bool allowStreamChange = false,
   String? instanceName,
   GetIt? getIt,
 }) {
   assert(_activeWatchItState != null,
       'watchStream can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  Stream<R>? observedObject;
 
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
-  if (select != null) {
-    observedObject = select(parentObject);
-  } else {
-    try {
-      observedObject = (parentObject) as Stream<R>;
-    } on TypeError catch (_) {
-      throw ArgumentError(
-          'Either the return type of the select function or the type T has to be a Stream');
-    }
+
+  // Validate target type when no select function is provided
+  if (select == null && parentObject is! Stream<R>) {
+    throw ArgumentError(
+        'When no select function is provided, target must be a Stream<$R>. '
+        'Got: ${parentObject.runtimeType}');
   }
+
   return _activeWatchItState!.watchStream(
-      target: observedObject,
+      parentOrStream: parentObject,
       initialValue: initialValue,
       instanceName: instanceName,
       preserveState: preserveState,
-      parentObject: parentObject);
+      selector: select,
+      allowStreamChange: allowStreamChange);
 }
 
 /// [watchFuture] observes the `Future` returned by [select] and triggers a rebuild as soon
@@ -270,31 +269,30 @@ AsyncSnapshot<R> watchFuture<T extends Object, R>(
   required R initialValue,
   String? instanceName,
   bool preserveState = true,
+  bool allowFutureChange = false,
   GetIt? getIt,
 }) {
   assert(_activeWatchItState != null,
       'watchFuture can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  Future<R>? observedObject;
 
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
-  if (select != null) {
-    observedObject = select(parentObject);
-  } else {
-    try {
-      observedObject = parentObject as Future<R>;
-    } on TypeError catch (_) {
-      throw ArgumentError(
-          'Either the return type of the select function or the type T has to be a Future');
-    }
+
+  // Validate target type when no select function is provided
+  if (select == null && parentObject is! Future<R>) {
+    throw ArgumentError(
+        'When no select function is provided, target must be a Future<$R>. '
+        'Got: ${parentObject.runtimeType}');
   }
-  return _activeWatchItState!.registerFutureHandler<Future<R>, R>(
-      target: observedObject,
+
+  return _activeWatchItState!.registerFutureHandler<T, R>(
+      parentOrFuture: parentObject,
       initialValueProvider: () => initialValue,
       instanceName: instanceName,
       preserveState: preserveState,
       allowMultipleSubscribers: false,
-      parentObject: parentObject);
+      selector: select,
+      allowFutureChange: allowFutureChange);
 }
 
 /// [registerHandler] registers a [handler] function for a `ValueListenable`
@@ -339,8 +337,15 @@ void registerHandler<T extends Object, R>({
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
 
-  _activeWatchItState!.watchListenable<R>(
-    parentObject: parentObject,
+  // Validate target type when no select function is provided
+  if (select == null && parentObject is! Listenable) {
+    throw ArgumentError(
+        'When no select function is provided, target must be a Listenable. '
+        'Got: ${parentObject.runtimeType}');
+  }
+
+  _activeWatchItState!.watchListenable<T, R>(
+    parentOrListenable: parentObject,
     selector: select,
     allowObservableChange: allowObservableChange,
     handler: handler,
@@ -377,8 +382,8 @@ void registerChangeNotifierHandler<T extends ChangeNotifier>({
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
 
-  _activeWatchItState!.watchListenable<T>(
-    parentObject: parentObject,
+  _activeWatchItState!.watchListenable<T, T>(
+    parentOrListenable: parentObject,
     handler: handler,
     executeImmediately: executeImmediately,
   );
@@ -407,30 +412,31 @@ void registerStreamHandler<T extends Object, R>({
           void Function() cancel)
       handler,
   R? initialValue,
+  bool allowStreamChange = false,
   T? target,
   String? instanceName,
   GetIt? getIt,
 }) {
   assert(_activeWatchItState != null,
       'registerStreamHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  Stream<R>? observedObject;
 
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
-  if (select != null) {
-    observedObject = select(parentObject);
-  } else {
-    try {
-      observedObject = (parentObject) as Stream<R>;
-    } on TypeError catch (_) {
-      throw ArgumentError(
-          'Either the return type of the select function or the type T has to be a Stream');
-    }
+
+  // Validate target type when no select function is provided
+  if (select == null && parentObject is! Stream<R>) {
+    throw ArgumentError(
+        'When no select function is provided, target must be a Stream<$R>. '
+        'Got: ${parentObject.runtimeType}');
   }
-  _activeWatchItState!.registerStreamHandler(observedObject, handler,
+
+  _activeWatchItState!.watchStream(
+      parentOrStream: parentObject,
       initialValue: initialValue,
       instanceName: instanceName,
-      parentObject: parentObject);
+      handler: handler,
+      selector: select,
+      allowStreamChange: allowStreamChange);
 }
 
 /// [registerFutureHandler] registers a [handler] function for a `Future` exactly
@@ -465,32 +471,31 @@ void registerFutureHandler<T extends Object, R>({
   R? initialValue,
   String? instanceName,
   bool callHandlerOnlyOnce = false,
+  bool allowFutureChange = false,
   GetIt? getIt,
 }) {
   assert(_activeWatchItState != null,
       'registerFutureHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  Future<R>? observedObject;
 
   final getItInstance = getIt ?? di;
   final parentObject = target ?? getItInstance<T>(instanceName: instanceName);
-  if (select != null) {
-    observedObject = select(parentObject);
-  } else {
-    try {
-      observedObject = (parentObject) as Future<R>;
-    } on TypeError catch (_) {
-      throw ArgumentError(
-          'Either the return type of the select function or the type T has to be a Future');
-    }
+
+  // Validate target type when no select function is provided
+  if (select == null && parentObject is! Future<R>) {
+    throw ArgumentError(
+        'When no select function is provided, target must be a Future<$R>. '
+        'Got: ${parentObject.runtimeType}');
   }
-  _activeWatchItState!.registerFutureHandler<Future<R>, R?>(
-      target: observedObject,
+
+  _activeWatchItState!.registerFutureHandler<T, R?>(
+      parentOrFuture: parentObject,
       handler: handler,
       initialValueProvider: () => initialValue,
       instanceName: instanceName,
       allowMultipleSubscribers: true,
       callHandlerOnlyOnce: callHandlerOnlyOnce,
-      parentObject: parentObject);
+      selector: select,
+      allowFutureChange: allowFutureChange);
 }
 
 /// returns `true` if all registered async or dependent objects are ready

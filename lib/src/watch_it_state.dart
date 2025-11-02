@@ -176,9 +176,9 @@ class _WatchItState {
 
   /// [handler] and [executeImmediately] are used by [registerHandler]
   /// Returns the observable being watched
-  Listenable watchListenable<R>({
-    required Object parentObject,
-    Function? selector,
+  Listenable watchListenable<T, R>({
+    required T parentOrListenable,
+    ValueListenable<R> Function(T)? selector,
     bool allowObservableChange = true,
     void Function(BuildContext context, R newValue, void Function() dispose)?
         handler,
@@ -196,27 +196,11 @@ class _WatchItState {
 
       // Get the observable
       if (selector != null) {
-        final result = selector(parentObject);
-        // TODO: Check if we can replace this with a static type check
-        assert(() {
-          if (result is! Listenable) {
-            throw ArgumentError('Selector must return a Listenable. '
-                'Got: ${result.runtimeType}');
-          }
-          return true;
-        }());
-        actualTarget = result as Listenable;
+        actualTarget = selector(parentOrListenable);
       } else {
-        // No selector - parentObject must be the Listenable
-        assert(() {
-          if (parentObject is! Listenable) {
-            throw ArgumentError(
-                'parentObject must be a Listenable when selector is null. '
-                'Got: ${parentObject.runtimeType}');
-          }
-          return true;
-        }());
-        actualTarget = parentObject as Listenable;
+        // No selector - parentOrListenable is the Listenable
+        // Type already validated in public API
+        actualTarget = parentOrListenable as Listenable;
       }
 
       if (actualTarget == watch.observedObject) {
@@ -243,26 +227,10 @@ class _WatchItState {
     } else {
       // First build - get the observable
       if (selector != null) {
-        final result = selector(parentObject);
-        // TODO: Check if we can replace this with a static type check
-        assert(() {
-          if (result is! Listenable) {
-            throw ArgumentError('Selector must return a Listenable. '
-                'Got: ${result.runtimeType}');
-          }
-          return true;
-        }());
-        actualTarget = result as Listenable;
+        actualTarget = selector(parentOrListenable);
       } else {
-        assert(() {
-          if (parentObject is! Listenable) {
-            throw ArgumentError(
-                'parentObject must be a Listenable when selector is null. '
-                'Got: ${parentObject.runtimeType}');
-          }
-          return true;
-        }());
-        actualTarget = parentObject as Listenable;
+        // Type already validated in public API
+        actualTarget = parentOrListenable as Listenable;
       }
 
       watch = _WatchEntry(
@@ -271,7 +239,7 @@ class _WatchItState {
           x.notificationHandler!,
         ),
         isHandlerWatch: handler != null,
-        parentObject: parentObject,
+        parentObject: parentOrListenable,
         shouldTrace: _logRebuilds || _logHandlers,
       );
       _appendWatch(watch);
@@ -376,22 +344,25 @@ class _WatchItState {
     listenable.addListener(handler);
   }
 
-  AsyncSnapshot<R> watchStream<T extends Stream<R>, R>({
-    required T target,
+  AsyncSnapshot<R> watchStream<T, R>({
+    required T parentOrStream,
     required R? initialValue,
     String? instanceName,
     bool preserveState = true,
     void Function(BuildContext context, AsyncSnapshot<R> snapshot,
             void Function() cancel)?
         handler,
-    Object? parentObject,
+    Stream<R> Function(T)? selector,
+    bool allowStreamChange = true,
   }) {
-    final stream = target;
-
     var watch = _getWatch() as _WatchEntry<Stream<R>, AsyncSnapshot<R?>>?;
+    Stream<R> actualStream;
 
     if (watch != null) {
-      if (stream == watch.observedObject) {
+      if (!allowStreamChange && selector != null) {
+        // FAST PATH: Don't call selector, reuse cached stream
+        actualStream = watch.observedObject;
+
         /// Only if this isn't used to register a handler
         ///  still the same stream so we can directly return last value
         if (handler == null) {
@@ -402,19 +373,48 @@ class _WatchItState {
           return AsyncSnapshot<R>.nothing();
         }
       } else {
-        /// select returned a different value than the last time
-        /// so we have to unregister our handler and subscribe anew
-        watch.dispose();
-        initialValue = preserveState && watch.lastValue!.hasData
-            ? watch.lastValue!.data
-            : initialValue;
+        // SLOW PATH: Call selector to get potentially new stream
+        if (selector != null) {
+          actualStream = selector(parentOrStream);
+        } else {
+          // No selector - parentOrStream is the Stream
+          // Type already validated in public API
+          actualStream = parentOrStream as Stream<R>;
+        }
+
+        if (actualStream == watch.observedObject) {
+          /// Only if this isn't used to register a handler
+          ///  still the same stream so we can directly return last value
+          if (handler == null) {
+            assert(watch.lastValue != null && !watch.lastValue!.hasError);
+            return AsyncSnapshot<R>.withData(
+                watch.lastValue!.connectionState, watch.lastValue!.data as R);
+          } else {
+            return AsyncSnapshot<R>.nothing();
+          }
+        } else {
+          /// select returned a different value than the last time
+          /// so we have to unregister our handler and subscribe anew
+          watch.dispose();
+          initialValue = preserveState && watch.lastValue!.hasData
+              ? watch.lastValue!.data
+              : initialValue;
+        }
       }
     } else {
+      // First build - get the stream
+      if (selector != null) {
+        actualStream = selector(parentOrStream);
+      } else {
+        // No selector - parentOrStream is the Stream
+        // Type already validated in public API
+        actualStream = parentOrStream as Stream<R>;
+      }
       watch = _WatchEntry<Stream<R>, AsyncSnapshot<R?>>(
         dispose: (x) => x.subscription!.cancel(),
-        observedObject: stream,
+        observedObject: actualStream,
         isHandlerWatch: handler != null,
-        parentObject: parentObject,
+        parentObject: parentOrStream,
         shouldTrace: _logRebuilds || _logHandlers,
       );
       _appendWatch(
@@ -423,7 +423,7 @@ class _WatchItState {
     }
 
     // ignore: cancel_subscriptions
-    final subscription = stream.listen(
+    final subscription = actualStream.listen(
       (x) {
         if (_element == null) {
           /// it seems it can happen that a handler is still
@@ -464,7 +464,7 @@ class _WatchItState {
       },
     );
     watch.subscription = subscription;
-    watch.observedObject = stream;
+    watch.observedObject = actualStream;
     watch.lastValue =
         AsyncSnapshot<R?>.withData(ConnectionState.waiting, initialValue);
 
@@ -496,8 +496,8 @@ class _WatchItState {
         watch.lastValue!.connectionState, watch.lastValue!.data as R);
   }
 
-  void registerStreamHandler<T extends Stream<R>, R>(
-    T target,
+  void registerStreamHandler<T, R>(
+    T parentOrStream,
     void Function(
       BuildContext context,
       AsyncSnapshot<R> snapshot,
@@ -505,14 +505,16 @@ class _WatchItState {
     ) handler, {
     R? initialValue,
     String? instanceName,
-    Object? parentObject,
+    Stream<R> Function(T)? selector,
+    bool allowStreamChange = true,
   }) {
     watchStream<T, R>(
-        target: target,
+        parentOrStream: parentOrStream,
         initialValue: initialValue,
         instanceName: instanceName,
         handler: handler,
-        parentObject: parentObject);
+        selector: selector,
+        allowStreamChange: allowStreamChange);
   }
 
   /// this function is used to implement several others
@@ -528,8 +530,8 @@ class _WatchItState {
   /// [futureProvider] overrides a looked up future. Used to implement [allReady]
   /// We use provider functions here so that [registerFutureHandler] ensure
   /// that they are only called once.
-  AsyncSnapshot<R> registerFutureHandler<T extends Object?, R>(
-      {T? target,
+  AsyncSnapshot<R> registerFutureHandler<T, R>(
+      {T? parentOrFuture,
       void Function(BuildContext context, AsyncSnapshot<R?> snapshot,
               void Function() cancel)?
           handler,
@@ -541,22 +543,48 @@ class _WatchItState {
       String? instanceName,
       bool callHandlerOnlyOnce = false,
       void Function(R value)? dispose,
-      Object? parentObject,
-      bool isCreateOnceAsync = false}) {
-    assert(
-        futureProvider != null || target != null,
-        "if you use ${handler != null ? 'registerFutureHandler' : 'watchFuture'} "
-        'target or futureProvider has to be provided');
+      bool isCreateOnceAsync = false,
+      Future<R> Function(T)? selector,
+      bool allowFutureChange = true}) {
     var watch = _getWatch() as _WatchEntry<Future<R>, AsyncSnapshot<R>>?;
 
     Future<R>? future;
-    if (futureProvider == null && target is Future<R>) {
-      future = target;
-    }
 
     R? initialValue;
     if (watch != null) {
-      if (future == watch.observedObject || futureProvider != null) {
+      if (!allowFutureChange && selector != null && futureProvider == null) {
+        // FAST PATH: Don't call selector, reuse cached future
+        future = watch.observedObject;
+
+        ///  still the same Future so we can directly return last value
+        if (handler != null &&
+            _element != null &&
+            (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
+          if (_logHandlers) {
+            watch._logWatchItEvent();
+          }
+          handler(_element!, watch.lastValue!, watch.dispose);
+          watch.handlerWasCalled = true;
+        }
+
+        return watch.lastValue!;
+      } else if (future == watch.observedObject || futureProvider != null) {
+        ///  still the same Future so we can directly return last value
+        /// in case that we got a futureProvider we always keep the first
+        /// returned Future
+        /// and call the Handler again as the state hasn't changed
+        if (handler != null &&
+            _element != null &&
+            (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
+          if (_logHandlers) {
+            watch._logWatchItEvent();
+          }
+          handler(_element!, watch.lastValue!, watch.dispose);
+          watch.handlerWasCalled = true;
+        }
+
+        return watch.lastValue!;
+      } else if (future == watch.observedObject || futureProvider != null) {
         ///  still the same Future so we can directly return last value
         /// in case that we got a futureProvider we always keep the first
         /// returned Future
@@ -573,6 +601,18 @@ class _WatchItState {
 
         return watch.lastValue!;
       } else {
+        // Get the future from selector or parentOrFuture
+        if (futureProvider == null) {
+          if (selector != null) {
+            assert(parentOrFuture != null,
+                'parentOrFuture must not be null when using a selector');
+            future = selector(parentOrFuture as T);
+          } else {
+            // Type already validated in public API
+            future = parentOrFuture as Future<R>;
+          }
+        }
+
         /// select returned a different value than the last time
         /// so we have to unregister out handler and subscribe anew
         watch.dispose();
@@ -581,8 +621,17 @@ class _WatchItState {
             : initialValueProvider.call();
       }
     } else {
-      /// In case futureProvider != null
-      future ??= futureProvider!();
+      // First build - get the future
+      if (futureProvider != null) {
+        future = futureProvider();
+      } else if (selector != null) {
+        assert(parentOrFuture != null,
+            'parentOrFuture must not be null when using a selector');
+        future = selector(parentOrFuture as T);
+      } else {
+        // Type already validated in public API
+        future = parentOrFuture as Future<R>;
+      }
 
       watch = _WatchEntry<Future<R>, AsyncSnapshot<R>>(
           observedObject: future,
@@ -594,7 +643,7 @@ class _WatchItState {
             }
           },
           eventType: isCreateOnceAsync ? WatchItEvent.createOnceAsync : null,
-          parentObject: parentObject,
+          parentObject: parentOrFuture,
           shouldTrace: _logRebuilds || _logHandlers);
       _appendWatch(watch, allowMultipleSubscribers: allowMultipleSubscribers);
     }
@@ -721,7 +770,8 @@ class _WatchItState {
 
   AsyncSnapshot<T> createOnceAsync<T>(Future<T> Function() factoryFunc,
       {required T initialValue, void Function(T value)? dispose}) {
-    return registerFutureHandler<void, T>(
+    return registerFutureHandler<Object?, T>(
+      parentOrFuture: null,
       allowMultipleSubscribers: false,
       initialValueProvider: () => initialValue,
       futureProvider: factoryFunc,
@@ -759,7 +809,9 @@ class _WatchItState {
         parentObject: null,
       );
     }
-    final readyResult = registerFutureHandler<Object, bool>(
+    final readyResult = 
+registerFutureHandler<Object?, bool>(
+      parentOrFuture: null,
       handler: (context, x, dispose) {
         if (x.hasError) {
           onError?.call(context, x.error);
@@ -807,7 +859,9 @@ class _WatchItState {
         parentObject: null,
       );
     }
-    final readyResult = registerFutureHandler<Object, bool>(
+    final readyResult = 
+registerFutureHandler<Object?, bool>(
+      parentOrFuture: null,
       handler: (context, x, cancel) {
         if (x.hasError) {
           onError?.call(context, x.error);
@@ -911,7 +965,7 @@ class _WatchItState {
         parentObject: null,
       );
     }
-    watchListenable(parentObject: onScopeChanged!);
+    watchListenable(parentOrListenable: onScopeChanged!);
     onScopeChanged!.value = null;
     return result;
   }
