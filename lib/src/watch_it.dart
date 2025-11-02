@@ -606,6 +606,105 @@ void callOnce(void Function(BuildContext context) init,
   _activeWatchItState!.callOnce(init, dispose: dispose);
 }
 
+/// Executes a callback once after the first frame has been rendered.
+/// This is useful when you need to perform operations that require the widget
+/// tree to be fully built and laid out, such as:
+/// - Showing dialogs or snackbars on initialization
+/// - Accessing widget dimensions via RenderBox
+/// - Scrolling to a specific position
+/// - Starting animations that depend on final widget sizes
+///
+/// The callback is called exactly once in the lifetime of the widget, after
+/// the first frame is rendered. If the widget is disposed before the callback
+/// executes, the callback will not be called.
+///
+/// This replaces the common pattern of:
+/// ```dart
+/// @override
+/// void initState() {
+///   super.initState();
+///   WidgetsBinding.instance.addPostFrameCallback((_) {
+///     // Do something after first frame
+///   });
+/// }
+/// ```
+///
+/// Example usage:
+/// ```dart
+/// class MyWidget extends WatchingWidget {
+///   @override
+///   Widget build(BuildContext context) {
+///     callAfterFirstBuild((context) {
+///       // This runs AFTER the first frame is rendered
+///       showDialog(
+///         context: context,
+///         builder: (_) => AlertDialog(
+///           title: Text('Welcome!'),
+///           content: Text('This dialog appears after the first build.'),
+///         ),
+///       );
+///     });
+///     return Scaffold(body: Text('Hello World'));
+///   }
+/// }
+/// ```
+void callAfterFirstBuild(void Function(BuildContext context) callback) {
+  assert(_activeWatchItState != null,
+      'callAfterFirstBuild can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
+  _activeWatchItState!.callAfterFirstBuild(callback);
+}
+
+/// Executes a callback after every frame has been rendered.
+/// This is useful when you need to perform operations after each rebuild that
+/// require the widget tree to be fully built and laid out, such as:
+/// - Updating scroll positions after content changes
+/// - Repositioning overlays or tooltips
+/// - Performing measurements that need to run after every layout
+///
+/// The callback is called after every build/rebuild of the widget. The [cancel]
+/// function can be called from within the callback to stop future invocations.
+///
+/// **Important**: This function must be called in the same order on every build,
+/// following watch_it's ordering rules.
+///
+/// Example usage:
+/// ```dart
+/// class ChatWidget extends WatchingWidget {
+///   final scrollController = ScrollController();
+///
+///   @override
+///   Widget build(BuildContext context) {
+///     final messages = watchValue((ChatModel m) => m.messages);
+///
+///     callAfterEveryBuild((context, cancel) {
+///       // Scroll to bottom after every rebuild
+///       if (scrollController.hasClients) {
+///         scrollController.jumpTo(
+///           scrollController.position.maxScrollExtent,
+///         );
+///       }
+///
+///       // Optionally cancel if a condition is met
+///       if (messages.length > 100) {
+///         cancel(); // Stop auto-scrolling after 100 messages
+///       }
+///     });
+///
+///     return ListView.builder(
+///       controller: scrollController,
+///       itemCount: messages.length,
+///       itemBuilder: (context, index) => Text(messages[index]),
+///     );
+///   }
+/// }
+/// ```
+void callAfterEveryBuild(
+    void Function(BuildContext context, void Function() cancel) callback) {
+  assert(_activeWatchItState != null,
+      'callAfterEveryBuild can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
+  _activeWatchItState!.callAfterEveryBuild(callback);
+}
+
 ///To dispose anything when the widget is disposed you can use call `onDispose` anywhere in your build function.
 void onDispose(void Function() dispose) {
   assert(_activeWatchItState != null,

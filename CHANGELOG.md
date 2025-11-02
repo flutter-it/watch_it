@@ -1,3 +1,21 @@
+## 2.0.0 - Performance optimizations and post-frame callbacks
+
+### Breaking Changes
+* **BREAKING**: Replaced dependency `functional_listener ^4.0.0` with `listen_it ^5.1.0`. This is a breaking change as `functional_listener` has been renamed and restructured into `listen_it`. If you use `functional_listener` operators in your code, update your imports from `package:functional_listener/functional_listener.dart` to `package:listen_it/listen_it.dart`.
+* **BREAKING**: `watchValue()` and `registerHandler()` now default to `allowObservableChange: false` for better performance and memory leak prevention. This means the selector function is only called once on first build. If you need to dynamically switch observables (e.g., `condition ? obsA : obsB`), set `allowObservableChange: true`. This prevents common memory leaks from inline chain creation like `watchValue((m) => m.source.map(...))`.
+
+### New Features
+* Added `callAfterFirstBuild()` function that executes a callback once after the first frame has been rendered. This is useful for operations that require the widget tree to be fully built and laid out, such as showing dialogs, accessing widget dimensions, scrolling to positions, or starting animations that depend on final widget sizes. This replaces the common pattern of using `WidgetsBinding.instance.addPostFrameCallback` in `initState()`.
+* Added `callAfterEveryBuild()` function that executes a callback after every frame has been rendered. This is useful for operations that need to run after each rebuild, such as updating scroll positions, repositioning overlays, or performing measurements. The callback includes a `cancel()` function to stop future invocations when needed.
+
+### Performance Improvements
+* `watchValue()` and `registerHandler()` now have zero overhead on rebuilds with default settings - selectors are only called once instead of on every build
+* Added helpful `StateError` messages when observables change unexpectedly with `allowObservableChange: false`, guiding users to the correct fix
+
+### Bug Fixes
+* Fixed `createOnceAsync` test isolation issue by properly resetting `testCompleter` in `setUp`
+* Internal refactoring: Renamed parameters for better clarity (`target` → `parentOrListenable`, etc.)
+
 ## 1.7.0 - adding powerful tracing and logging so you can understand why and when your UI rebuilds
 ## 1.6.5 - 11.03.2025
 * PR by @timmaffett imrproving the markdown of the readme

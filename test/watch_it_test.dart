@@ -243,6 +243,11 @@ int initDiposeCount = 0;
 int disposeCount = 0;
 int lifetimeValueCount = 0;
 int lifetimeValueDisposeCount = 0;
+int afterFirstBuildCallCount = 0;
+String? afterFirstBuildContext;
+int afterEveryBuildCallCount = 0;
+String? afterEveryBuildContext;
+bool afterEveryBuildCancelled = false;
 
 void main() {
   setUp(() async {
@@ -261,6 +266,11 @@ void main() {
     disposeCount = 0;
     lifetimeValueCount = 0;
     lifetimeValueDisposeCount = 0;
+    afterFirstBuildCallCount = 0;
+    afterFirstBuildContext = null;
+    afterEveryBuildCallCount = 0;
+    afterEveryBuildContext = null;
+    afterEveryBuildCancelled = false;
     testCompleter = Completer<void>();
     await GetIt.I.reset();
     valNotifier = ValueNotifier<String>('notifierVal');
@@ -973,4 +983,223 @@ void main() {
     expect(isReadyHandlerResult, 'Ready');
     expect(buildCount, 2);
   });
+
+  testWidgets('callAfterFirstBuild executes after first frame', (tester) async {
+    final widget = _CallAfterFirstBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    // After pumpWidget, the build completes and post-frame callback executes
+    expect(afterFirstBuildCallCount, 1);
+    expect(afterFirstBuildContext, isNotNull);
+  });
+
+  testWidgets('callAfterFirstBuild only executes once on multiple rebuilds',
+      (tester) async {
+    final widget = _CallAfterFirstBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    expect(afterFirstBuildCallCount, 1);
+
+    // Trigger rebuilds
+    valNotifier.value = 'changed1';
+    await tester.pump();
+
+    valNotifier.value = 'changed2';
+    await tester.pump();
+
+    // Should still only have been called once
+    expect(afterFirstBuildCallCount, 1);
+  });
+
+  testWidgets(
+      'callAfterFirstBuild does not crash if widget disposed after first build',
+      (tester) async {
+    final widget = _CallAfterFirstBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    // Callback executes after first build
+    expect(afterFirstBuildCallCount, 1);
+
+    // Dispose the widget
+    await tester.pumpWidget(Container());
+    await tester.pump();
+
+    // No crashes should occur
+    expect(afterFirstBuildCallCount, 1);
+  });
+
+  testWidgets('callAfterFirstBuild has valid context', (tester) async {
+    final widget = _CallAfterFirstBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    expect(afterFirstBuildCallCount, 1);
+    expect(afterFirstBuildContext, isNotNull);
+    // Context should contain the widget type name
+    expect(afterFirstBuildContext, contains('_CallAfterFirstBuildTestWidget'));
+  });
+
+  testWidgets('callAfterEveryBuild executes after every frame', (tester) async {
+    final widget = _CallAfterEveryBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    // After first build
+    expect(afterEveryBuildCallCount, 1);
+    expect(afterEveryBuildContext, isNotNull);
+
+    // Trigger rebuild
+    valNotifier.value = 'changed1';
+    await tester.pump();
+
+    // Should have been called again
+    expect(afterEveryBuildCallCount, 2);
+
+    // Another rebuild
+    valNotifier.value = 'changed2';
+    await tester.pump();
+
+    // Should have been called again
+    expect(afterEveryBuildCallCount, 3);
+  });
+
+  testWidgets('callAfterEveryBuild cancel stops future calls', (tester) async {
+    final widget = _CallAfterEveryBuildWithCancelTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    // After first build
+    expect(afterEveryBuildCallCount, 1);
+    expect(afterEveryBuildCancelled, false);
+
+    // Trigger rebuild - this will call cancel
+    valNotifier.value = 'trigger_cancel';
+    await tester.pump();
+
+    // Should have been called and cancelled
+    expect(afterEveryBuildCallCount, 2);
+    expect(afterEveryBuildCancelled, true);
+
+    // Reset counter to verify no more calls
+    final countAtCancel = afterEveryBuildCallCount;
+
+    // Another rebuild - should NOT call callback
+    valNotifier.value = 'after_cancel';
+    await tester.pump();
+
+    // Count should not have increased
+    expect(afterEveryBuildCallCount, countAtCancel);
+  });
+
+  testWidgets('callAfterEveryBuild has valid context on every call',
+      (tester) async {
+    final widget = _CallAfterEveryBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    expect(afterEveryBuildCallCount, 1);
+    expect(afterEveryBuildContext, isNotNull);
+    expect(afterEveryBuildContext, contains('_CallAfterEveryBuildTestWidget'));
+
+    // Trigger rebuild and verify context is still valid
+    valNotifier.value = 'changed';
+    await tester.pump();
+
+    expect(afterEveryBuildCallCount, 2);
+    expect(afterEveryBuildContext, isNotNull);
+    expect(afterEveryBuildContext, contains('_CallAfterEveryBuildTestWidget'));
+  });
+
+  testWidgets('callAfterEveryBuild stops on widget disposal', (tester) async {
+    final widget = _CallAfterEveryBuildTestWidget();
+
+    await tester.pumpWidget(widget);
+
+    expect(afterEveryBuildCallCount, 1);
+
+    // Dispose the widget
+    await tester.pumpWidget(Container());
+    await tester.pump();
+
+    final countAtDisposal = afterEveryBuildCallCount;
+
+    // Trigger some pumps - callback should not be called
+    await tester.pump();
+    await tester.pump();
+
+    expect(afterEveryBuildCallCount, countAtDisposal);
+  });
+}
+
+/// Test widget for callAfterFirstBuild tests
+class _CallAfterFirstBuildTestWidget extends StatelessWidget with WatchItMixin {
+  const _CallAfterFirstBuildTestWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch something to ensure the widget can rebuild
+    final notifierVal = watch(valNotifier);
+
+    callAfterFirstBuild((ctx) {
+      afterFirstBuildCallCount++;
+      afterFirstBuildContext = ctx.toString();
+    });
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Text(notifierVal.value),
+    );
+  }
+}
+
+/// Test widget for callAfterEveryBuild tests
+class _CallAfterEveryBuildTestWidget extends StatelessWidget with WatchItMixin {
+  const _CallAfterEveryBuildTestWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch something to ensure the widget can rebuild
+    final notifierVal = watch(valNotifier);
+
+    callAfterEveryBuild((ctx, cancel) {
+      afterEveryBuildCallCount++;
+      afterEveryBuildContext = ctx.toString();
+    });
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Text(notifierVal.value),
+    );
+  }
+}
+
+/// Test widget for callAfterEveryBuild with cancel
+class _CallAfterEveryBuildWithCancelTestWidget extends StatelessWidget
+    with WatchItMixin {
+  const _CallAfterEveryBuildWithCancelTestWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch something to ensure the widget can rebuild
+    final notifierVal = watch(valNotifier);
+
+    callAfterEveryBuild((ctx, cancel) {
+      afterEveryBuildCallCount++;
+      afterEveryBuildContext = ctx.toString();
+
+      // Cancel on second call
+      if (afterEveryBuildCallCount >= 2) {
+        afterEveryBuildCancelled = true;
+        cancel();
+      }
+    });
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Text(notifierVal.value),
+    );
+  }
 }

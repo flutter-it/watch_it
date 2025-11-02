@@ -940,6 +940,70 @@ class _WatchItState {
     }
   }
 
+  bool _afterFirstBuildWasCalled = false;
+
+  void callAfterFirstBuild(void Function(BuildContext context) callback) {
+    if (!_afterFirstBuildWasCalled) {
+      if (_logHelperFunctions) {
+        watchItLogFunction?.call(
+          sourceLocationOfWatch: _getSourceLocation(),
+          eventType: WatchItEvent.callAfterFirstBuild,
+          observedObject: null,
+          parentObject: null,
+        );
+      }
+      _afterFirstBuildWasCalled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Check if element is still mounted before calling callback
+        if (_element != null) {
+          callback(_element!);
+        }
+      });
+    }
+  }
+
+  void callAfterEveryBuild(
+      void Function(BuildContext context, void Function() cancel) callback) {
+    var watch = _getWatch() as _WatchEntry<void, bool>?;
+
+    if (watch == null) {
+      // First time - create the watch entry with a cancelled flag
+      watch = _WatchEntry<void, bool>(
+        observedObject: null,
+        lastValue: false, // false = not cancelled
+        dispose: (_) {
+          // Cleanup if needed
+        },
+        eventType: WatchItEvent.callAfterEveryBuild,
+        shouldTrace: _logHelperFunctions,
+      );
+      _appendWatch(watch);
+    }
+
+    // Check if this callback was cancelled
+    if (watch.lastValue == true) {
+      // Already cancelled, don't schedule callback
+      return;
+    }
+
+    if (_logHelperFunctions) {
+      watch._logWatchItEvent();
+    }
+
+    // Create a cancel function that marks this watch as cancelled
+    void cancelFunc() {
+      watch!.lastValue = true; // Mark as cancelled
+    }
+
+    // Schedule the callback for after this frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Check if element is still mounted and not cancelled
+      if (_element != null && watch!.lastValue != true) {
+        callback(_element!, cancelFunc);
+      }
+    });
+  }
+
   void Function()? _disposeFunction;
   void onDispose(void Function() dispose) {
     _disposeFunction ??= dispose;
