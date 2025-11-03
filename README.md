@@ -1,11 +1,11 @@
 
 [:heart: Sponsor](https://github.com/sponsors/escamoteur) <a href="https://www.buymeacoffee.com/escamoteur" target="_blank"><img align="right" src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
+# watch_it
+![Build](https://github.com/escamoteur/watch_it/workflows/Dart%20CI/badge.svg)
+[![codecov](https://codecov.io/gh/escamoteur/watch_it/branch/master/graph/badge.svg)](https://codecov.io/gh/escamoteur/watch_it)
 
 >Visit our new documentation site https://flutter-it.dev
-
-
-# watch_it
 
 A simple state management solution powered by get_it.
 
