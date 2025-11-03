@@ -3,7 +3,8 @@
 ### Maintenance
 * Updated get_it dependency to ^9.0.0
 * Added GitHub Actions workflow for CI/CD with automated testing and code coverage
-* Added build status and codecov badges to README
+* Improved README header with logo and better formatting to match flutter_it ecosystem style
+* Added package logo to pub.dev screenshots
 
 ## 2.0.0 - Performance optimizations and post-frame callbacks
 
