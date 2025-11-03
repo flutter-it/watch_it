@@ -1,3 +1,10 @@
+## 2.0.1
+
+### Maintenance
+* Updated get_it dependency to ^9.0.0
+* Added GitHub Actions workflow for CI/CD with automated testing and code coverage
+* Added build status and codecov badges to README
+
 ## 2.0.0 - Performance optimizations and post-frame callbacks
 
 ### Breaking Changes
