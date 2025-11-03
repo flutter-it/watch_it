@@ -1,11 +1,17 @@
+<img align="left" src="https://github.com/flutter-it/watch_it/blob/main/watch_it.png?raw=true" alt="watch_it logo" width="150" style="margin-left: -10px;"/>
 
-[:heart: Sponsor](https://github.com/sponsors/escamoteur) <a href="https://www.buymeacoffee.com/escamoteur" target="_blank"><img align="right" src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+<div align="right">
+  <a href="https://www.buymeacoffee.com/escamoteur"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="28" width="120"/></a>
+  <br/>
+  <a href="https://github.com/sponsors/escamoteur"><img src="https://img.shields.io/badge/Sponsor-❤-ff69b4?style=for-the-badge" alt="Sponsor" height="28" width="120"/></a>
+</div>
 
-# watch_it
-![Build](https://github.com/escamoteur/watch_it/workflows/Dart%20CI/badge.svg)
-[![codecov](https://codecov.io/gh/escamoteur/watch_it/branch/master/graph/badge.svg)](https://codecov.io/gh/escamoteur/watch_it)
+<br clear="both"/>
 
->Visit our new documentation site https://flutter-it.dev
+# watch_it <a href="https://codecov.io/gh/escamoteur/watch_it"><img align="right" src="https://codecov.io/gh/escamoteur/watch_it/branch/master/graph/badge.svg?style=for-the-badge" alt="codecov" width="200"/></a>
+
+> 📚 **[Complete documentation available at flutter-it.dev](https://flutter-it.dev/documentation/watch_it/getting_started)**
+> Check out the comprehensive docs with detailed guides, examples, and best practices!
 
 A simple state management solution powered by get_it.
 

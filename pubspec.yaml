@@ -5,6 +5,10 @@ homepage: https://github.com/escamoteur/watch_it
 funding:
   - https://github.com/sponsors/escamoteur/
 
+screenshots:
+  - description: 'watch_it logo'
+    path: watch_it.png
+
 environment:
   sdk: '>=2.19.6 <4.0.0'
   flutter: ">=3.0.0"
