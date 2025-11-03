@@ -8,7 +8,7 @@
 
 <br clear="both"/>
 
-# watch_it <a href="https://codecov.io/gh/escamoteur/watch_it"><img align="right" src="https://codecov.io/gh/escamoteur/watch_it/branch/master/graph/badge.svg?style=for-the-badge" alt="codecov" width="200"/></a>
+# watch_it <a href="https://codecov.io/gh/escamoteur/watch_it"><img align="right" src="https://codecov.io/gh/escamoteur/watch_it/branch/main/graph/badge.svg?style=for-the-badge" alt="codecov" width="200"/></a>
 
 > 📚 **[Complete documentation available at flutter-it.dev](https://flutter-it.dev/documentation/watch_it/getting_started)**
 > Check out the comprehensive docs with detailed guides, examples, and best practices!
