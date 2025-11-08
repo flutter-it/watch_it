@@ -239,6 +239,93 @@ There are some important rules to follow in order to avoid bugs with the `watch`
 
 If you want to know more about the reasons for this rule check out [Lifting the magic curtain](#lifting-the-magic-curtain)
 
+## Watch Ordering and Conditional Watches
+
+The most common mistake when using WatchIt is placing conditional `watch` calls in the middle of your build method. **All `watch` calls must happen in the same order on every build.**
+
+### The Problem
+
+When you have conditional `watch` calls that come before other `watch` calls, WatchIt can lose track of which watch corresponds to which data. This happens because watches are stored in a list indexed by their call order.
+
+**❌ BAD - Conditional in the middle:**
+
+```dart
+class MyWidget extends StatelessWidget with WatchItMixin {
+  @override
+  Widget build(BuildContext context) {
+    final listing = watchIt<Listing>();
+
+    // Conditional watch BEFORE other watches
+    if (listing.hasDetails) {
+      watch(listing.details!);  // ❌ This is at index 1 SOMETIMES
+    }
+
+    // These watches will have different indices depending on the conditional
+    final count = watchValue((Model m) => m.count);     // Index 1 or 2?
+    final name = watchValue((Model m) => m.name);       // Index 2 or 3?
+
+    return Text('$count - $name');
+  }
+}
+```
+
+When `listing.hasDetails` changes from `true` to `false`, the indices shift and WatchIt tries to retrieve the wrong watch entries. You'll see a helpful error message:
+
+```
+Watch ordering violation detected!
+
+You have conditional watch calls (inside if/switch statements) that are
+causing watch_it to retrieve the wrong objects on rebuild.
+
+Fix: Move ALL conditional watch calls to the END of your build method.
+Only the LAST watch call can be conditional.
+
+Example - BAD:
+  watch(model);
+  if (condition) { watch(optional); }  // ← Problem!
+  watchValue((M m) => m.property);     // ← Gets wrong type
+
+Example - GOOD:
+  watch(model);
+  watchValue((M m) => m.property);
+  if (condition) { watch(optional); }  // ← At the end: OK
+
+Widget: MyWidget
+```
+
+### The Solution
+
+**✅ GOOD - Conditional at the end:**
+
+```dart
+class MyWidget extends StatelessWidget with WatchItMixin {
+  @override
+  Widget build(BuildContext context) {
+    final listing = watchIt<Listing>();
+
+    // All non-conditional watches FIRST
+    final count = watchValue((Model m) => m.count);     // Always index 1
+    final name = watchValue((Model m) => m.name);       // Always index 2
+
+    // Conditional watch at the END
+    if (listing.hasDetails) {
+      watch(listing.details!);  // ✅ Only the last watch can be conditional
+    }
+
+    return Text('$count - $name');
+  }
+}
+```
+
+When the conditional watch is at the end, adding or removing it doesn't affect the indices of previous watches.
+
+### Key Takeaways
+
+- ✅ **All non-conditional watches first**: Put regular `watch` calls at the top of your build method
+- ✅ **Conditionals at the end**: Only the LAST watch call can be inside an `if`/`switch` statement
+- ✅ **Same order every build**: Each `watch` call must happen at the same position on every build
+- ❌ **No conditionals in the middle**: Don't put `watch` calls inside conditionals if other watches follow them
+
 # The watch functions in detail:
 
 ## Watching `Listenable / ChangeNotifier`

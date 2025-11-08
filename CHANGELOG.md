@@ -1,3 +1,10 @@
+## 2.1.0
+
+### Improvements
+* **Better Error Messages**: Watch ordering violations now show a helpful error message instead of cryptic type errors. When conditional watch calls are placed incorrectly, you'll see clear guidance on how to fix it with BAD/GOOD examples.
+* **Enhanced Documentation**: Added "Watch Ordering and Conditional Watches" section to README with visual examples explaining why conditional watches must be at the end of build methods.
+* **Improved Test Coverage**: Test coverage increased to 93.3%.
+
 ## 2.0.1
 
 ### Maintenance

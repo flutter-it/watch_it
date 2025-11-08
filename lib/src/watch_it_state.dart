@@ -146,15 +146,60 @@ class _WatchItState {
 
   /// if _getWatch returns null it means this is either the very first or the las watch
   /// in this list.
-  _WatchEntry? _getWatch() {
+  /// Performs type checking to catch watch ordering violations early with helpful error messages.
+  _WatchEntry<T, V>? _getWatch<T, V>() {
     if (currentWatchIndex != null) {
       assert(_watchList.length > currentWatchIndex!);
       final result = _watchList[currentWatchIndex!];
-      currentWatchIndex = currentWatchIndex! + 1;
-      if (currentWatchIndex! == _watchList.length) {
-        currentWatchIndex = null;
+
+      // Type check with helpful error message for watch ordering violations
+      try {
+        final typedResult = result as _WatchEntry<T, V>;
+        currentWatchIndex = currentWatchIndex! + 1;
+        if (currentWatchIndex! == _watchList.length) {
+          currentWatchIndex = null;
+        }
+        return typedResult;
+      } on TypeError catch (_) {
+        // Build error message with source location if available
+        final buffer = StringBuffer('Watch ordering violation detected!\n\n');
+
+        buffer.writeln(
+            'You have conditional watch calls (inside if/switch statements) that are');
+        buffer.writeln(
+            'causing watch_it to retrieve the wrong objects on rebuild.');
+
+        // Add source location if tracing was enabled
+        if (result.sourceLocationOfWatch != null) {
+          buffer.writeln('\nConflicting watch entry was created at:');
+          buffer.writeln(result.sourceLocationOfWatch);
+          buffer.writeln('\nLook for a watch statement that returns type: $V');
+        }
+
+        buffer.writeln(
+            '\nFix: Move ALL conditional watch calls to the END of your build method.');
+        buffer.writeln('Only the LAST watch call can be conditional.');
+        buffer.writeln('\nExample - BAD:');
+        buffer.writeln('  watch(model);');
+        buffer.writeln('  if (condition) { watch(optional); }  // ← Problem!');
+        buffer.writeln(
+            '  watchValue((M m) => m.property);     // ← Gets wrong type');
+        buffer.writeln('\nExample - GOOD:');
+        buffer.writeln('  watch(model);');
+        buffer.writeln('  watchValue((M m) => m.property);');
+        buffer.writeln(
+            '  if (condition) { watch(optional); }  // ← At the end: OK');
+
+        // Suggest enabling tracing if source location wasn't available
+        if (result.sourceLocationOfWatch == null) {
+          buffer.writeln(
+              '\nTip: Call enableTracing() in your build method to see exact source locations.');
+        }
+
+        buffer.writeln('\nWidget: ${_element?.widget.runtimeType}');
+
+        throw StateError(buffer.toString());
       }
-      return result;
     }
     return null;
   }
@@ -184,7 +229,7 @@ class _WatchItState {
         handler,
     bool executeImmediately = false,
   }) {
-    var watch = _getWatch() as _WatchEntry<Listenable, R>?;
+    var watch = _getWatch<Listenable, R>();
 
     Listenable actualTarget;
 
@@ -300,7 +345,7 @@ class _WatchItState {
     required R Function(T) only,
     Object? parentObject,
   }) {
-    var watch = _getWatch() as _WatchEntry<Listenable, R>?;
+    var watch = _getWatch<Listenable, R>();
 
     if (watch != null) {
       if (listenable != watch.observedObject) {
@@ -355,7 +400,7 @@ class _WatchItState {
     Stream<R> Function(T)? selector,
     bool allowStreamChange = true,
   }) {
-    var watch = _getWatch() as _WatchEntry<Stream<R>, AsyncSnapshot<R?>>?;
+    var watch = _getWatch<Stream<R>, AsyncSnapshot<R?>>();
     Stream<R> actualStream;
 
     if (watch != null) {
@@ -517,6 +562,28 @@ class _WatchItState {
         allowStreamChange: allowStreamChange);
   }
 
+  /// Helper to call handler if conditions are met
+  /// Returns true if handler was called
+  bool _callFutureHandlerIfNeeded<R>(
+    void Function(BuildContext context, AsyncSnapshot<R?> snapshot,
+            void Function() cancel)?
+        handler,
+    _WatchEntry<Future<R>, AsyncSnapshot<R>> watch,
+    bool callHandlerOnlyOnce,
+  ) {
+    if (handler != null &&
+        _element != null &&
+        (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
+      if (_logHandlers) {
+        watch._logWatchItEvent();
+      }
+      handler(_element!, watch.lastValue!, watch.dispose);
+      watch.handlerWasCalled = true;
+      return true;
+    }
+    return false;
+  }
+
   /// this function is used to implement several others
   /// therefore not all parameters will be always used
   /// [initialValueProvider] can return an initial value that is returned
@@ -546,7 +613,7 @@ class _WatchItState {
       bool isCreateOnceAsync = false,
       Future<R> Function(T)? selector,
       bool allowFutureChange = true}) {
-    var watch = _getWatch() as _WatchEntry<Future<R>, AsyncSnapshot<R>>?;
+    var watch = _getWatch<Future<R>, AsyncSnapshot<R>>();
 
     Future<R>? future;
 
@@ -557,32 +624,14 @@ class _WatchItState {
         future = watch.observedObject;
 
         ///  still the same Future so we can directly return last value
-        if (handler != null &&
-            _element != null &&
-            (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
-          if (_logHandlers) {
-            watch._logWatchItEvent();
-          }
-          handler(_element!, watch.lastValue!, watch.dispose);
-          watch.handlerWasCalled = true;
-        }
-
+        _callFutureHandlerIfNeeded(handler, watch, callHandlerOnlyOnce);
         return watch.lastValue!;
       } else if (futureProvider != null) {
         ///  still the same Future so we can directly return last value
         /// in case that we got a futureProvider we always keep the first
         /// returned Future
         /// and call the Handler again as the state hasn't changed
-        if (handler != null &&
-            _element != null &&
-            (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
-          if (_logHandlers) {
-            watch._logWatchItEvent();
-          }
-          handler(_element!, watch.lastValue!, watch.dispose);
-          watch.handlerWasCalled = true;
-        }
-
+        _callFutureHandlerIfNeeded(handler, watch, callHandlerOnlyOnce);
         return watch.lastValue!;
       } else {
         // Get the future from selector or parentOrFuture
@@ -599,16 +648,7 @@ class _WatchItState {
         if (future == watch.observedObject) {
           ///  still the same Future so we can directly return last value
           /// and call the Handler again as the state hasn't changed
-          if (handler != null &&
-              _element != null &&
-              (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
-            if (_logHandlers) {
-              watch._logWatchItEvent();
-            }
-            handler(_element!, watch.lastValue!, watch.dispose);
-            watch.handlerWasCalled = true;
-          }
-
+          _callFutureHandlerIfNeeded(handler, watch, callHandlerOnlyOnce);
           return watch.lastValue!;
         } else {
           /// Future identity changed
@@ -735,7 +775,7 @@ class _WatchItState {
   }
 
   T createOnce<T>(T Function() factoryFunc, {void Function(T value)? dispose}) {
-    var watch = _getWatch() as _WatchEntry<void, T>?;
+    var watch = _getWatch<void, T>();
 
     if (watch == null) {
       final value = factoryFunc();
@@ -963,7 +1003,7 @@ class _WatchItState {
 
   void callAfterEveryBuild(
       void Function(BuildContext context, void Function() cancel) callback) {
-    var watch = _getWatch() as _WatchEntry<void, bool>?;
+    var watch = _getWatch<void, bool>();
 
     if (watch == null) {
       // First time - create the watch entry with a cancelled flag
