@@ -763,16 +763,19 @@ AsyncSnapshot<T> createOnceAsync<T>(Future<T> Function() factoryFunc,
 /// WatchItSubTreeTraceControl(
 ///   logRebuilds: true,
 ///   logHandlers: true,
+///   logHelperFunctions: true,
 ///   child: ...
 /// )
 void enableTracing({
   bool logRebuilds = true,
   bool logHandlers = true,
+  bool logHelperFunctions = true,
 }) {
   assert(_activeWatchItState != null,
       'enableTracing can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   _activeWatchItState!.enableTracing(
     logHandlers: logHandlers,
     logRebuilds: logRebuilds,
+    logHelperFunctions: logHelperFunctions,
   );
 }

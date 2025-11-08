@@ -50,6 +50,24 @@ class TestModel extends ChangeNotifier {
   }
 }
 
+/// Model with switchable futures for testing Future identity changes
+class SwitchableFutureModel extends ChangeNotifier {
+  final Future<String> future1;
+  final Future<String> future2;
+  ValueNotifier<int> rebuildTrigger = ValueNotifier<int>(0);
+
+  SwitchableFutureModel({
+    required this.future1,
+    required this.future2,
+  });
+
+  Future<String> getFuture(bool useFirst) {
+    return useFirst ? future1 : future2;
+  }
+
+  void triggerRebuild() => rebuildTrigger.value++;
+}
+
 // Test widgets for different scenarios
 class WatchValueTestWidget extends StatelessWidget with WatchItMixin {
   final bool allowObservableChange;
@@ -131,6 +149,53 @@ class WatchFutureTestWidget extends StatelessWidget with WatchItMixin {
         children: [
           Text(snapshot.data ?? 'null', key: const Key('value')),
           Text(trigger.toString(), key: const Key('trigger')),
+        ],
+      ),
+    );
+  }
+}
+
+class SwitchableFutureTestWidget extends WatchingStatefulWidget {
+  final bool useFuture1;
+  final VoidCallback onSwitch;
+
+  const SwitchableFutureTestWidget({
+    super.key,
+    required this.useFuture1,
+    required this.onSwitch,
+  });
+
+  @override
+  State<SwitchableFutureTestWidget> createState() =>
+      _SwitchableFutureTestWidgetState();
+}
+
+class _SwitchableFutureTestWidgetState
+    extends State<SwitchableFutureTestWidget> {
+  @override
+  Widget build(BuildContext context) {
+    // Watch with allowFutureChange=true to allow switching
+    // Use preserveState=false so we can test that subscription actually changes
+    final snapshot = watchFuture<SwitchableFutureModel, String>(
+      (m) => m.getFuture(widget.useFuture1),
+      initialValue: 'initial',
+      allowFutureChange: true,
+      preserveState: false,
+    );
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        children: [
+          Text(snapshot.data ?? 'null', key: const Key('value')),
+          GestureDetector(
+            key: const Key('switch'),
+            onTap: () {
+              widget.onSwitch();
+              setState(() {});
+            },
+            child: const Text('Switch'),
+          ),
         ],
       ),
     );
@@ -270,6 +335,59 @@ void main() {
       model.triggerRebuild();
       await tester.pump();
       expect(model.future1SelectorCalls, 3, reason: 'Called again');
+    });
+
+    testWidgets(
+        'allowFutureChange: true - handles selector returning different Future identity',
+        (tester) async {
+      // This test checks that when the selector returns a DIFFERENT Future object
+      // (not just re-calling selector), the new Future's value is actually used.
+      // This exposes the bug at line 571 where (future == watch.observedObject) never works
+      // because future is null at that point.
+
+      final completer1 = Completer<String>();
+      final completer2 = Completer<String>();
+
+      bool useFuture1 = true;
+
+      final testModel = SwitchableFutureModel(
+        future1: completer1.future,
+        future2: completer2.future,
+      );
+      await di.reset();
+      di.registerSingleton(testModel);
+
+      Widget buildWidget() => SwitchableFutureTestWidget(
+            useFuture1: useFuture1,
+            onSwitch: () => useFuture1 = !useFuture1,
+          );
+
+      await tester.pumpWidget(buildWidget());
+
+      // Complete first future
+      completer1.complete('value1');
+      await tester.pump(); // Trigger future completion callback
+      await tester.pump(); // Rebuild with new value
+      expect(find.text('value1'), findsOneWidget);
+
+      // Switch to second future (DIFFERENT Future object)
+      await tester.tap(find.byKey(const Key('switch')));
+      await tester.pumpWidget(
+          buildWidget()); // Rebuild widget with new useFuture1 value
+
+      // After fix: Should reset to initial value when switching futures
+      expect(find.text('initial'), findsOneWidget,
+          reason: 'Should reset to initial value when Future changes');
+
+      // Complete second future
+      completer2.complete('value2');
+      await tester.pump(); // Trigger future completion callback
+      await tester.pump(); // Rebuild with new value
+
+      // After fix: Should show value2 from the new Future
+      expect(find.text('value2'), findsOneWidget,
+          reason:
+              'Should use new Future value after properly disposing old subscription');
     });
   });
 }

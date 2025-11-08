@@ -1132,6 +1132,111 @@ void main() {
 
     expect(afterEveryBuildCallCount, countAtDisposal);
   });
+
+  group('Observable Change Detection', () {
+    testWidgets(
+        'watchPropertyValue disposes old subscription when target changes',
+        (tester) async {
+      final notifier1 = ValueNotifier<int>(1);
+      final notifier2 = ValueNotifier<int>(2);
+      GetIt.I.registerSingleton(notifier1);
+      GetIt.I.registerSingleton(notifier2, instanceName: 'second');
+
+      bool useFirst = true;
+
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return _WatchPropertyValueChangeWidget(
+              useFirst: useFirst,
+              onSwitch: () => setState(() => useFirst = !useFirst),
+            );
+          },
+        ),
+      ));
+
+      expect(find.text('1'), findsOneWidget);
+
+      // Switch the observable - this will dispose the old subscription
+      await tester.tap(find.byType(GestureDetector));
+      await tester.pump();
+
+      // Should now show the second notifier's value
+      expect(find.text('2'), findsOneWidget);
+    });
+
+    testWidgets(
+        'registerHandler with allowObservableChange: true disposes old subscription',
+        (tester) async {
+      final notifier1 = ValueNotifier<int>(1);
+      final notifier2 = ValueNotifier<int>(2);
+      GetIt.I.registerSingleton(notifier1);
+      GetIt.I.registerSingleton(notifier2, instanceName: 'second');
+
+      bool useFirst = true;
+      int? capturedValue;
+
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return _ObservableChangeAllowedWidget(
+              useFirst: useFirst,
+              onSwitch: () => setState(() => useFirst = !useFirst),
+              onValue: (value) => capturedValue = value,
+            );
+          },
+        ),
+      ));
+
+      expect(capturedValue, 1);
+
+      // Switch the observable - this will dispose the old subscription
+      await tester.tap(find.byType(GestureDetector));
+      await tester.pump();
+
+      // Should now receive the second notifier's value
+      expect(capturedValue, 2);
+    });
+
+    testWidgets(
+        'registerHandler throws StateError when observable changes without allowObservableChange',
+        (tester) async {
+      final notifier1 = ValueNotifier<int>(10);
+      final notifier2 = ValueNotifier<int>(20);
+      GetIt.I.registerSingleton(notifier1);
+      GetIt.I.registerSingleton(notifier2, instanceName: 'second');
+
+      bool useFirst = true;
+
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return _ObservableChangeErrorWidget(
+              useFirst: useFirst,
+              onSwitch: () => setState(() => useFirst = !useFirst),
+            );
+          },
+        ),
+      ));
+
+      // Switch the observable - should throw StateError
+      await tester.tap(find.byType(GestureDetector));
+
+      // Try to pump to trigger the rebuild where the error occurs
+      try {
+        await tester.pump();
+      } catch (e) {
+        // Exception might be thrown during pump
+      }
+
+      // The error should have been thrown during build
+      final exception = tester.takeException();
+      expect(exception, isA<StateError>());
+    });
+  });
 }
 
 /// Test widget for callAfterFirstBuild tests
@@ -1200,6 +1305,111 @@ class _CallAfterEveryBuildWithCancelTestWidget extends StatelessWidget
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Text(notifierVal.value),
+    );
+  }
+}
+
+/// Test widget for watchPropertyValue with changing target
+class _WatchPropertyValueChangeWidget extends StatelessWidget
+    with WatchItMixin {
+  final bool useFirst;
+  final VoidCallback onSwitch;
+
+  const _WatchPropertyValueChangeWidget({
+    required this.useFirst,
+    required this.onSwitch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Get different notifiers based on useFirst
+    final notifier = useFirst
+        ? GetIt.I<ValueNotifier<int>>()
+        : GetIt.I<ValueNotifier<int>>(instanceName: 'second');
+
+    // watchPropertyValue with a changing target will dispose the old subscription
+    final value = watchPropertyValue<ValueNotifier<int>, int>(
+      (n) => n.value,
+      target: notifier,
+    );
+
+    return GestureDetector(
+      onTap: onSwitch,
+      child: Text('$value'),
+    );
+  }
+}
+
+/// Test widget for registerHandler with allowObservableChange: true
+class _ObservableChangeAllowedWidget extends StatelessWidget with WatchItMixin {
+  final bool useFirst;
+  final VoidCallback onSwitch;
+  final void Function(int) onValue;
+
+  const _ObservableChangeAllowedWidget({
+    required this.useFirst,
+    required this.onSwitch,
+    required this.onValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Get different notifiers based on useFirst - this changes the observable
+    final notifier = useFirst
+        ? GetIt.I<ValueNotifier<int>>()
+        : GetIt.I<ValueNotifier<int>>(instanceName: 'second');
+
+    // registerHandler with allowObservableChange: true allows switching observables
+    // This will dispose when observable changes
+    registerHandler<ValueNotifier<int>, int>(
+      select: null, // null means the target itself is the ValueListenable
+      target: notifier,
+      allowObservableChange: true,
+      executeImmediately: true,
+      handler: (context, value, cancel) {
+        onValue(value);
+      },
+    );
+
+    return GestureDetector(
+      onTap: onSwitch,
+      child: const Text('Widget'),
+    );
+  }
+}
+
+/// Test widget for registerHandler error when observable changes
+class _ObservableChangeErrorWidget extends StatelessWidget with WatchItMixin {
+  final bool useFirst;
+  final VoidCallback onSwitch;
+
+  const _ObservableChangeErrorWidget({
+    required this.useFirst,
+    required this.onSwitch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Get different notifiers based on useFirst
+    final notifier = useFirst
+        ? GetIt.I<ValueNotifier<int>>()
+        : GetIt.I<ValueNotifier<int>>(instanceName: 'second');
+
+    // registerHandler with allowObservableChange: false (default) will throw when observable changes
+    // Using null select means target must be a ValueListenable
+    registerHandler<ValueNotifier<int>, int>(
+      select: null, // null means the target itself is the ValueListenable
+      target: notifier,
+      allowObservableChange:
+          false, // This will cause StateError on observable change
+      handler: (context, value, cancel) {
+        // Handler won't be reached because StateError is thrown first
+      },
+    );
+
+    return GestureDetector(
+      onTap: onSwitch,
+      child: const Text('Widget'),
     );
   }
 }

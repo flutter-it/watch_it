@@ -568,23 +568,7 @@ class _WatchItState {
         }
 
         return watch.lastValue!;
-      } else if (future == watch.observedObject || futureProvider != null) {
-        ///  still the same Future so we can directly return last value
-        /// in case that we got a futureProvider we always keep the first
-        /// returned Future
-        /// and call the Handler again as the state hasn't changed
-        if (handler != null &&
-            _element != null &&
-            (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
-          if (_logHandlers) {
-            watch._logWatchItEvent();
-          }
-          handler(_element!, watch.lastValue!, watch.dispose);
-          watch.handlerWasCalled = true;
-        }
-
-        return watch.lastValue!;
-      } else if (future == watch.observedObject || futureProvider != null) {
+      } else if (futureProvider != null) {
         ///  still the same Future so we can directly return last value
         /// in case that we got a futureProvider we always keep the first
         /// returned Future
@@ -602,23 +586,38 @@ class _WatchItState {
         return watch.lastValue!;
       } else {
         // Get the future from selector or parentOrFuture
-        if (futureProvider == null) {
-          if (selector != null) {
-            assert(parentOrFuture != null,
-                'parentOrFuture must not be null when using a selector');
-            future = selector(parentOrFuture as T);
-          } else {
-            // Type already validated in public API
-            future = parentOrFuture as Future<R>;
-          }
+        if (selector != null) {
+          assert(parentOrFuture != null,
+              'parentOrFuture must not be null when using a selector');
+          future = selector(parentOrFuture as T);
+        } else {
+          // Type already validated in public API
+          future = parentOrFuture as Future<R>;
         }
 
-        /// select returned a different value than the last time
-        /// so we have to unregister out handler and subscribe anew
-        watch.dispose();
-        initialValue = preserveState && watch.lastValue!.hasData
-            ? watch.lastValue!.data
-            : initialValueProvider.call();
+        // Check if the Future identity has changed
+        if (future == watch.observedObject) {
+          ///  still the same Future so we can directly return last value
+          /// and call the Handler again as the state hasn't changed
+          if (handler != null &&
+              _element != null &&
+              (!watch.handlerWasCalled || !callHandlerOnlyOnce)) {
+            if (_logHandlers) {
+              watch._logWatchItEvent();
+            }
+            handler(_element!, watch.lastValue!, watch.dispose);
+            watch.handlerWasCalled = true;
+          }
+
+          return watch.lastValue!;
+        } else {
+          /// Future identity changed
+          /// so we have to unregister out handler and subscribe anew
+          watch.dispose();
+          initialValue = preserveState && watch.lastValue!.hasData
+              ? watch.lastValue!.data
+              : initialValueProvider.call();
+        }
       }
     } else {
       // First build - get the future
@@ -651,7 +650,7 @@ class _WatchItState {
     handler ??= (context, x, cancel) => _markNeedsBuild(watch);
 
     /// in case of a new watch or an changing Future we do the following:
-    watch.observedObject = future!;
+    watch.observedObject = future;
 
     /// by using a local variable we ensure that only the value and not the
     /// variable is captured.
