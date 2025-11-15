@@ -26,9 +26,9 @@ class _HomePageState extends State<HomePage> {
         });
 
     final bool isRunning =
-        watch(di<WeatherManager>().updateWeatherCommand.isExecuting).value;
+        watch(di<WeatherManager>().updateWeatherCommand.isRunning).value;
     final updateButtonEnabled =
-        watchValue((WeatherManager x) => x.updateWeatherCommand.canExecute);
+        watchValue((WeatherManager x) => x.updateWeatherCommand.canRun);
     final updateDisabled =
         watchValue((WeatherManager x) => x.setRestrictionStateCommand);
 

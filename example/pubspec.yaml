@@ -10,10 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.5.0
-  command_it: ^8.0.0
+  command_it: ^9.0.2
   watch_it:
     path: ../
-  listen_it: ^5.1.0
+  listen_it: ^5.3.3
 
 flutter:
   uses-material-design: true

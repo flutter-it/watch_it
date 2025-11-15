@@ -1,3 +1,8 @@
+## 2.1.1
+
+### Maintenance
+* Updated example to use command_it 9.0.2 API (`execute` → `run`, `isExecuting` → `isRunning`)
+
 ## 2.1.0
 
 ### Improvements

@@ -30,9 +30,9 @@ class WeatherManager {
     // make sure we start processing only if the user make a short pause typing
     textChangedCommand.debounce(Duration(milliseconds: 500)).listen(
       (filterText, _) {
-        // I could omit he execute because Command is a callable
+        // I could omit he run because Command is a callable
         // class  but here it makes the intention clearer
-        updateWeatherCommand.execute(filterText);
+        updateWeatherCommand.run(filterText);
       },
     );
 
@@ -43,7 +43,7 @@ class WeatherManager {
     );
 
     // Update data on start-up
-    updateWeatherCommand.execute();
+    updateWeatherCommand.run();
   }
 
   // Async function that queries the REST API and converts the result into the form our ListViewBuilder can consume

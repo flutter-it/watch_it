@@ -62,9 +62,8 @@ class _HomePageState extends State<HomePage> {
               children: [
                 WeatherListView(),
                 ValueListenableBuilder<bool>(
-                  valueListenable: GetIt.I<WeatherManager>()
-                      .updateWeatherCommand
-                      .isExecuting,
+                  valueListenable:
+                      GetIt.I<WeatherManager>().updateWeatherCommand.isRunning,
                   builder: (BuildContext context, bool isRunning, _) {
                     // if true we show a busy Spinner otherwise the ListView
                     if (isRunning == true) {
@@ -90,12 +89,11 @@ class _HomePageState extends State<HomePage> {
               children: <Widget>[
                 Expanded(
                   child: ValueListenableBuilder<bool>(
-                    valueListenable: GetIt.I<WeatherManager>()
-                        .updateWeatherCommand
-                        .canExecute,
-                    builder: (BuildContext context, bool canExecute, _) {
-                      // Depending on the value of canExecute we set or clear the Handler
-                      final handler = canExecute
+                    valueListenable:
+                        GetIt.I<WeatherManager>().updateWeatherCommand.canRun,
+                    builder: (BuildContext context, bool canRun, _) {
+                      // Depending on the value of canRun we set or clear the Handler
+                      final handler = canRun
                           ? GetIt.I<WeatherManager>().updateWeatherCommand
                           : null;
                       return ElevatedButton(
@@ -105,9 +103,9 @@ class _HomePageState extends State<HomePage> {
                             backgroundColor: Color.fromARGB(255, 33, 150, 243)),
 
                         /// because of a current limitation of Dart
-                        /// we have to use `?.execute` if the command is
+                        /// we have to use `?.run` if the command is
                         /// stored in a nullable variable like in this case
-                        onPressed: handler?.execute,
+                        onPressed: handler?.run,
                       );
                     },
                   ),
