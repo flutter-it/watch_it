@@ -1,3 +1,9 @@
+## 2.2.0
+
+### Improvements
+* **Renamed for clarity**: `callAfterFirstBuild()` → `callOnceAfterThisBuild()`. The new name better reflects the actual behavior: it executes once after the first build where the function is called, not necessarily after the widget's first build. This makes it clear that it can be safely used inside conditionals. Since this function was only introduced in version 2.0.0, migration should be straightforward - just update the function name in your code.
+* Enhanced documentation for `callOnceAfterThisBuild()` with better explanation of behavior and added example showing usage in conditionals for navigation when async dependencies are ready.
+
 ## 2.1.1
 
 ### Maintenance

@@ -984,7 +984,8 @@ void main() {
     expect(buildCount, 2);
   });
 
-  testWidgets('callAfterFirstBuild executes after first frame', (tester) async {
+  testWidgets('callOnceAfterThisBuild executes after first frame',
+      (tester) async {
     final widget = _CallAfterFirstBuildTestWidget();
 
     await tester.pumpWidget(widget);
@@ -994,7 +995,7 @@ void main() {
     expect(afterFirstBuildContext, isNotNull);
   });
 
-  testWidgets('callAfterFirstBuild only executes once on multiple rebuilds',
+  testWidgets('callOnceAfterThisBuild only executes once on multiple rebuilds',
       (tester) async {
     final widget = _CallAfterFirstBuildTestWidget();
 
@@ -1014,7 +1015,7 @@ void main() {
   });
 
   testWidgets(
-      'callAfterFirstBuild does not crash if widget disposed after first build',
+      'callOnceAfterThisBuild does not crash if widget disposed after first build',
       (tester) async {
     final widget = _CallAfterFirstBuildTestWidget();
 
@@ -1031,7 +1032,7 @@ void main() {
     expect(afterFirstBuildCallCount, 1);
   });
 
-  testWidgets('callAfterFirstBuild has valid context', (tester) async {
+  testWidgets('callOnceAfterThisBuild has valid context', (tester) async {
     final widget = _CallAfterFirstBuildTestWidget();
 
     await tester.pumpWidget(widget);
@@ -1239,7 +1240,7 @@ void main() {
   });
 }
 
-/// Test widget for callAfterFirstBuild tests
+/// Test widget for callOnceAfterThisBuild tests
 class _CallAfterFirstBuildTestWidget extends StatelessWidget with WatchItMixin {
   const _CallAfterFirstBuildTestWidget();
 
@@ -1248,7 +1249,7 @@ class _CallAfterFirstBuildTestWidget extends StatelessWidget with WatchItMixin {
     // Watch something to ensure the widget can rebuild
     final notifierVal = watch(valNotifier);
 
-    callAfterFirstBuild((ctx) {
+    callOnceAfterThisBuild((ctx) {
       afterFirstBuildCallCount++;
       afterFirstBuildContext = ctx.toString();
     });

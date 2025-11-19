@@ -979,19 +979,19 @@ class _WatchItState {
     }
   }
 
-  bool _afterFirstBuildWasCalled = false;
+  bool _onceAfterBuildWasCalled = false;
 
-  void callAfterFirstBuild(void Function(BuildContext context) callback) {
-    if (!_afterFirstBuildWasCalled) {
+  void callOnceAfterThisBuild(void Function(BuildContext context) callback) {
+    if (!_onceAfterBuildWasCalled) {
       if (_logHelperFunctions) {
         watchItLogFunction?.call(
           sourceLocationOfWatch: _getSourceLocation(),
-          eventType: WatchItEvent.callAfterFirstBuild,
+          eventType: WatchItEvent.callOnceAfterThisBuild,
           observedObject: null,
           parentObject: null,
         );
       }
-      _afterFirstBuildWasCalled = true;
+      _onceAfterBuildWasCalled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Check if element is still mounted before calling callback
         if (_element != null) {

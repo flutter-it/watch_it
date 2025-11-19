@@ -29,8 +29,8 @@ enum WatchItEvent {
   /// Call once operation (callOnce)
   callOnce,
 
-  /// Call after first build operation (callAfterFirstBuild)
-  callAfterFirstBuild,
+  /// Call once after this build operation (callOnceAfterThisBuild)
+  callOnceAfterThisBuild,
 
   /// Call after every build operation (callAfterEveryBuild)
   callAfterEveryBuild,
@@ -93,8 +93,8 @@ String _getEventTypeString(WatchItEvent eventType) {
       return 'Scope was pushed';
     case WatchItEvent.callOnce:
       return 'Call once was executed';
-    case WatchItEvent.callAfterFirstBuild:
-      return 'Call after first build was executed';
+    case WatchItEvent.callOnceAfterThisBuild:
+      return 'Call once after this build was executed';
     case WatchItEvent.callAfterEveryBuild:
       return 'Call after every build was executed';
     case WatchItEvent.onDispose:

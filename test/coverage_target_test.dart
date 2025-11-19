@@ -305,7 +305,7 @@ void main() {
       expect(disposeCalled, true);
     });
 
-    testWidgets('callAfterFirstBuild event logging', (tester) async {
+    testWidgets('callOnceAfterThisBuild event logging', (tester) async {
       bool logged = false;
       watchItLogFunction = ({
         String? sourceLocationOfWatch,
@@ -314,7 +314,7 @@ void main() {
         Object? parentObject,
         Object? lastValue,
       }) {
-        if (eventType == WatchItEvent.callAfterFirstBuild) {
+        if (eventType == WatchItEvent.callOnceAfterThisBuild) {
           logged = true;
         }
       };
@@ -1047,7 +1047,7 @@ class _CallAfterFirstBuildWidget extends StatelessWidget with WatchItMixin {
   Widget build(BuildContext context) {
     enableTracing(logHelperFunctions: true);
 
-    callAfterFirstBuild((context) {
+    callOnceAfterThisBuild((context) {
       // Called after first build
     });
 
@@ -1087,8 +1087,8 @@ class _DefaultLogWidget extends StatelessWidget with WatchItMixin {
     // Use default log function - don't override watchItLogFunction
     enableTracing(logHelperFunctions: true);
 
-    callAfterFirstBuild((context) {
-      // This will log with WatchItEvent.callAfterFirstBuild
+    callOnceAfterThisBuild((context) {
+      // This will log with WatchItEvent.callOnceAfterThisBuild
     });
 
     callAfterEveryBuild((context, cancel) {

@@ -606,17 +606,22 @@ void callOnce(void Function(BuildContext context) init,
   _activeWatchItState!.callOnce(init, dispose: dispose);
 }
 
-/// Executes a callback once after the first frame has been rendered.
+/// Executes a callback once after the current build has been rendered.
 /// This is useful when you need to perform operations that require the widget
 /// tree to be fully built and laid out, such as:
-/// - Showing dialogs or snackbars on initialization
+/// - Showing dialogs or snackbars
 /// - Accessing widget dimensions via RenderBox
 /// - Scrolling to a specific position
 /// - Starting animations that depend on final widget sizes
+/// - Navigation after async dependencies are ready
 ///
-/// The callback is called exactly once in the lifetime of the widget, after
-/// the first frame is rendered. If the widget is disposed before the callback
-/// executes, the callback will not be called.
+/// The callback is called exactly once - after the first build where this
+/// function is invoked. Subsequent builds will not trigger the callback again,
+/// even if this function is called again. If the widget is disposed before the
+/// callback executes, the callback will not be called.
+///
+/// **Note**: This can be safely used inside conditionals. The callback will
+/// execute once after the first build where the conditional is true.
 ///
 /// This replaces the common pattern of:
 /// ```dart
@@ -634,13 +639,13 @@ void callOnce(void Function(BuildContext context) init,
 /// class MyWidget extends WatchingWidget {
 ///   @override
 ///   Widget build(BuildContext context) {
-///     callAfterFirstBuild((context) {
-///       // This runs AFTER the first frame is rendered
+///     callOnceAfterThisBuild((context) {
+///       // This runs AFTER the current frame is rendered
 ///       showDialog(
 ///         context: context,
 ///         builder: (_) => AlertDialog(
 ///           title: Text('Welcome!'),
-///           content: Text('This dialog appears after the first build.'),
+///           content: Text('This dialog appears after build.'),
 ///         ),
 ///       );
 ///     });
@@ -648,10 +653,29 @@ void callOnce(void Function(BuildContext context) init,
 ///   }
 /// }
 /// ```
-void callAfterFirstBuild(void Function(BuildContext context) callback) {
+///
+/// Example with conditional:
+/// ```dart
+/// class InitScreen extends WatchingWidget {
+///   @override
+///   Widget build(BuildContext context) {
+///     final ready = allReady();
+///
+///     if (ready) {
+///       // Navigate once when ready
+///       callOnceAfterThisBuild((context) {
+///         Navigator.pushReplacement(context, ...);
+///       });
+///     }
+///
+///     return ready ? MainApp() : CircularProgressIndicator();
+///   }
+/// }
+/// ```
+void callOnceAfterThisBuild(void Function(BuildContext context) callback) {
   assert(_activeWatchItState != null,
-      'callAfterFirstBuild can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
-  _activeWatchItState!.callAfterFirstBuild(callback);
+      'callOnceAfterThisBuild can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
+  _activeWatchItState!.callOnceAfterThisBuild(callback);
 }
 
 /// Executes a callback after every frame has been rendered.

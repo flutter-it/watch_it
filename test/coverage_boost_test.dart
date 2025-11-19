@@ -707,7 +707,7 @@ void main() {
       expect(events.any((e) => e.contains('scopePush')), true);
     });
 
-    testWidgets('callAfterFirstBuild event type logged', (tester) async {
+    testWidgets('callOnceAfterThisBuild event type logged', (tester) async {
       final events = <String>[];
       watchItLogFunction = ({
         sourceLocationOfWatch,
@@ -726,9 +726,9 @@ void main() {
         ),
       );
 
-      await tester.pump(); // Let callAfterFirstBuild execute
+      await tester.pump(); // Let callOnceAfterThisBuild execute
 
-      expect(events.any((e) => e.contains('callAfterFirstBuild')), true);
+      expect(events.any((e) => e.contains('callOnceAfterThisBuild')), true);
     });
 
     testWidgets('callAfterEveryBuild event type logged', (tester) async {
@@ -1236,7 +1236,7 @@ class _CallAfterFirstBuildEventWidget extends StatelessWidget
   Widget build(BuildContext context) {
     enableTracing(logRebuilds: false, logHandlers: false);
 
-    callAfterFirstBuild((context) {});
+    callOnceAfterThisBuild((context) {});
 
     return const Text('call after first', textDirection: TextDirection.ltr);
   }
@@ -1344,7 +1344,8 @@ class _DefaultLogAllEventsWidget extends StatelessWidget with WatchItMixin {
     final ready = allReady(); // allReady event -> line 88
     final isReadyCheck = isReady<String>(); // isReady event -> line 90
     pushScope(); // scopePush event -> line 92
-    callAfterFirstBuild((context) {}); // callAfterFirstBuild event -> line 96
+    callOnceAfterThisBuild(
+        (context) {}); // callOnceAfterThisBuild event -> line 96
     callAfterEveryBuild(
         (context, cancel) {}); // callAfterEveryBuild event -> line 98
     rebuildOnScopeChanges(); // scopeChange event -> line 102
