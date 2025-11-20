@@ -1,3 +1,9 @@
+## 2.3.0
+
+### Documentation
+* Restructured README with clearer benefits, improved examples, and links to official flutter-it.dev website
+* Fixed documentation anchor links
+
 ## 2.2.0
 
 ### Improvements
