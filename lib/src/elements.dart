@@ -2,7 +2,7 @@ part of 'watch_it.dart';
 
 _WatchItState? _activeWatchItState;
 
-mixin _GetItElement on ComponentElement {
+mixin _WatchItElement on ComponentElement {
   final _WatchItState _state = _WatchItState();
   @override
   void mount(Element? parent, dynamic newSlot) {
@@ -32,11 +32,11 @@ mixin _GetItElement on ComponentElement {
 }
 
 class _StatelessWatchItElement<W extends StatelessWidget>
-    extends StatelessElement with _GetItElement {
+    extends StatelessElement with _WatchItElement {
   _StatelessWatchItElement(W super.widget);
 }
 
 class _StatefulWatchItElement<W extends StatefulWidget> extends StatefulElement
-    with _GetItElement {
+    with _WatchItElement {
   _StatefulWatchItElement(W super.widget);
 }

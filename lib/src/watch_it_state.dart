@@ -3,11 +3,11 @@ part of 'watch_it.dart';
 String _getSourceLocation() {
   final trace = StackTrace.current;
   final lines = trace.toString().split('\n');
-  final indexOfGetItElement =
-      lines.indexWhere((line) => line.contains('GetItElement'));
+  final indexOfWatchItElement =
+      lines.indexWhere((line) => line.contains('WatchItElement'));
 
   /// this should be the line that contains the name of widget that uses the watch
-  return lines[indexOfGetItElement - 2];
+  return lines[indexOfWatchItElement - 2];
 }
 
 class _WatchEntry<TObservedObject, TValue> {
