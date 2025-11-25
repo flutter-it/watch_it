@@ -1,6 +1,6 @@
 name: watch_it
 description: The simple state management powered by get_it. It allows to observe changes of objects inside the get_it service locator and rebuild the UI accordingly.
-version: 2.3.0
+version: 2.3.1
 homepage: https://github.com/flutter-it/watch_it
 funding:
   - https://github.com/sponsors/escamoteur/

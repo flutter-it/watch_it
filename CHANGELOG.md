@@ -1,3 +1,8 @@
+## 2.3.1
+
+### Maintenance
+* Updated example project
+
 ## 2.3.0
 
 ### Documentation
