@@ -1,3 +1,11 @@
+## 2.4.0
+
+### Improvements
+* `allReady()` now properly detects when new async singletons are registered in pushed scopes
+  * Previously, `allReady()` would not rebuild the UI when `pushNewScope()` registered new async singletons
+  * Now works correctly with get_it 9.2.0's cached `allReady()` future
+* Requires get_it ^9.2.0
+
 ## 2.3.1
 
 ### Maintenance

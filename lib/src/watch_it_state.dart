@@ -82,6 +82,12 @@ class _WatchItState {
   bool _logHandlers = false;
   bool _logHelperFunctions = false;
 
+  /// Cached allReady future from get_it (source)
+  Future<void>? _cachedAllReadySourceFuture;
+
+  /// Cached bool-wrapped allReady future for identity checks
+  Future<bool>? _cachedAllReadyFuture;
+
   void enableTracing(
       {bool logRebuilds = true,
       bool logHandlers = true,
@@ -848,12 +854,23 @@ class _WatchItState {
         parentObject: null,
       );
     }
+
+    // Get the source future from get_it (cached by get_it)
+    final sourceFuture = GetIt.I.allReady(timeout: timeout);
+
+    // If source future changed, create new bool wrapper
+    if (sourceFuture != _cachedAllReadySourceFuture) {
+      _cachedAllReadySourceFuture = sourceFuture;
+      _cachedAllReadyFuture = sourceFuture.then((_) => true);
+    }
+
     final readyResult = registerFutureHandler<Object?, bool>(
-      parentOrFuture: null,
+      parentOrFuture: _cachedAllReadyFuture,
       handler: (context, x, dispose) {
         if (x.hasError) {
           onError?.call(context, x.error);
-        } else {
+        } else if (x.connectionState == ConnectionState.done) {
+          // Only call onReady when the future has actually completed
           onReady?.call(context);
         }
         if (shouldRebuild) {
@@ -862,12 +879,8 @@ class _WatchItState {
         dispose();
       },
       allowMultipleSubscribers: false,
+      allowFutureChange: true,
       initialValueProvider: () => GetIt.I.allReadySync(),
-
-      /// as `GetIt.allReady` returns a Future<void> we convert it
-      /// to a bool because if this Future completes the meaning is true.
-      futureProvider: () =>
-          GetIt.I.allReady(timeout: timeout).then((_) => true),
       callHandlerOnlyOnce: callHandlerOnlyOnce,
     );
     if (readyResult.hasData) {
