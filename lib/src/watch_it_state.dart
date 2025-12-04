@@ -876,10 +876,11 @@ class _WatchItState {
         if (shouldRebuild) {
           _markNeedsBuild(null);
         }
-        dispose();
+        // Don't dispose - keep watching for future changes (new async registrations)
       },
       allowMultipleSubscribers: false,
       allowFutureChange: true,
+      preserveState: false, // Always get fresh value when future changes
       initialValueProvider: () => GetIt.I.allReadySync(),
       callHandlerOnlyOnce: callHandlerOnlyOnce,
     );

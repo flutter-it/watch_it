@@ -1,3 +1,9 @@
+## 2.4.1
+
+### Bug Fixes
+* Fixed `allReady()` returning stale `true` value when new async singletons are registered
+  * Now correctly returns `false` and shows loading state until new singletons complete
+
 ## 2.4.0
 
 ### Improvements
