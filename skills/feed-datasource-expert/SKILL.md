@@ -1,3 +1,11 @@
+---
+name: feed-datasource-expert
+description: Expert guidance on implementing paginated feeds and infinite scroll in Flutter using FeedDataSource and PagedFeedDataSource patterns. Covers base feed data source, cursor-based pagination, auto-pagination at length-3, proxy lifecycle with reference counting, feed widget implementation, filtered feeds, event bus integration, and creation with createOnce. Use when building paginated lists, infinite scroll, feed views, or managing proxy lifecycle in feeds.
+metadata:
+  author: flutter-it
+  version: "1.0"
+---
+
 # Feed DataSource Expert - Paged Lists & Infinite Scroll
 
 **What**: Pattern for paginated, reactive list/feed widgets using ValueNotifiers and Commands. Integrates with proxy pattern for entity lifecycle management.

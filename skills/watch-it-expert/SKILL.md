@@ -1,3 +1,11 @@
+---
+name: watch-it-expert
+description: Expert guidance on watch_it reactive widget state management for Flutter. Covers watch functions (watch, watchIt, watchValue, watchStream, watchFuture), handler registration (registerHandler, registerStreamHandler, registerFutureHandler), lifecycle functions (callOnce, createOnce, onDispose), ordering rules, widget granularity, and startup orchestration. Use when building reactive widgets with watch_it, watching ValueListenables/Streams/Futures, or managing widget-scoped state.
+metadata:
+  author: flutter-it
+  version: "1.0"
+---
+
 # watch_it Expert - Reactive Widget State Management
 
 **What**: Reactive widgets that auto-rebuild when ValueListenables/Listenables, Streams, or Futures change. Built on get_it. Provides `di` global alias for `GetIt.I`.
