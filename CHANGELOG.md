@@ -1,3 +1,8 @@
+## 2.4.2
+
+* Added AI skill files in `skills/` directory for AI coding assistants
+* Added AI-Assisted Development section to README
+
 ## 2.4.1
 
 ### Bug Fixes
