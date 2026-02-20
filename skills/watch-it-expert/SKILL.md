@@ -20,20 +20,24 @@ metadata:
 
 ## Widget Types
 
+**ALWAYS prefer `WatchingWidget` / `WatchingStatefulWidget`** for new code. Only use the mixin variants (`WatchItMixin` / `WatchItStatefulWidgetMixin`) when:
+- The widget needs **additional mixins** (e.g. `TickerProviderStateMixin`)
+- You're **adding watch_it to existing code** and don't want to change the base class
+
 ```dart
-// Stateless (most common)
+// ✅ DEFAULT - Use WatchingWidget for new stateless widgets
 class MyWidget extends WatchingWidget {
   @override
   Widget build(BuildContext context) { ... }
 }
 
-// Stateful
+// ✅ DEFAULT - Use WatchingStatefulWidget for new stateful widgets
 class MyWidget extends WatchingStatefulWidget {
   @override
   State<MyWidget> createState() => _MyWidgetState();
 }
 
-// Mixin on existing widget
+// ⚠️ ONLY when you need extra mixins or are retrofitting existing code
 class MyWidget extends StatelessWidget with WatchItMixin { ... }
 class MyWidget extends StatefulWidget with WatchItStatefulWidgetMixin { ... }
 ```
@@ -45,31 +49,61 @@ class MyWidget extends StatefulWidget with WatchItStatefulWidgetMixin { ... }
 final manager = watch(myChangeNotifier);            // rebuilds on notifyListeners()
 final value = watch(someValueNotifier).value;       // for ValueNotifiers, access .value
 
-// watchIt() - Watch a Listenable registered in get_it
+// watchIt() - Watch a Listenable registered in get_it (T MUST extend Listenable)
 final manager = watchIt<UserManager>();            // rebuilds on any notification
 final config = watchIt<Config>(instanceName: 'dev');
 
 // watchValue() - Watch a ValueListenable PROPERTY from a get_it object
+// IMPORTANT: T extends Object (NOT Listenable!) — works with ANY class registered in get_it
 // IMPORTANT: The selector MUST return a ValueListenable, not a bare value
+// Returns the unwrapped value directly (no need to call .value)
 final userState = watchValue((UserManager x) => x.userState);    // x.userState is ValueNotifier<UserState>
 final isRunning = watchValue((MyManager x) => x.loadCommand.isRunning);  // isRunning is ValueListenable<bool>
+// This is the PREFERRED way to watch command properties on non-Listenable managers:
+final isLoading = watchValue((AuthManager m) => m.loginCommand.isRunning);  // AuthManager is NOT a Listenable — works!
 
-// watchPropertyValue() - Watch a non-ValueListenable property from a Listenable
+// watchPropertyValue() - Watch a non-ValueListenable property from a Listenable (T MUST extend Listenable)
 // Rebuilds only when the selected value changes (equality check)
 final name = watchPropertyValue((UserManager x) => x.userName);  // userName is a plain String on a ChangeNotifier
 // Also supports local target:
 final name = watchPropertyValue((MyNotifier x) => x.name, target: myLocalNotifier);
 
 // watchStream() - Replace StreamBuilder
+// With get_it select (T looked up from get_it, select extracts the Stream):
 final snapshot = watchStream(
   (EventBus x) => x.onEvent<LoginEvent>(),
   initialValue: null,
 );
+// With target: + select: for objects NOT in get_it (select applied to target):
+final snapshot = watchStream(
+  (MyService x) => x.statusStream,
+  target: myLocalService,
+  initialValue: Status.idle,
+);
+// With target: only — when target IS the Stream itself (pass null as select):
+final snapshot = watchStream<Stream<AppLocale>, AppLocale>(
+  null,
+  target: LocaleSettings.getLocaleStream(),
+  initialValue: LocaleSettings.currentLocale,
+);
 
 // watchFuture() - Replace FutureBuilder
+// With get_it select (T looked up from get_it, select extracts the Future):
 final snapshot = watchFuture(
   (ApiClient x) => x.fetchConfig(),
   initialValue: defaultConfig,  // REQUIRED
+);
+// With target: + select: for objects NOT in get_it (select applied to target):
+final snapshot = watchFuture(
+  (MyService x) => x.loadData(),
+  target: myLocalService,
+  initialValue: null,
+);
+// With target: only — when target IS the Future itself (pass null as select):
+final snapshot = watchFuture<Future<Config>, Config>(
+  null,
+  target: someExternalFuture,
+  initialValue: defaultConfig,
 );
 ```
 
@@ -148,17 +182,42 @@ onDispose(() => someSubscription.cancel());
 
 ```dart
 // registerHandler - React to ValueListenable changes
+// IMPORTANT: T extends Object (NOT Listenable!) — works with ANY class registered in get_it
+// The handler's value parameter is FULLY TYPED based on the ValueListenable returned by select
 registerHandler(
   select: (MarketplaceManager m) => m.submitCommand.errors,
   handler: (context, error, cancel) {
+    // error is typed as CommandError? but handler never fires with null — use !
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: ${error.error}')),
+      SnackBar(content: Text('Error: ${error!.error}')),
     );
   },
   executeImmediately: false, // true = call handler with current value now
 );
 
-// registerHandler with local target (no get_it needed)
+// PREFER select: over target: — select gives you full type inference from the ValueListenable
+// target: is ONLY for local Listenables not registered in get_it (e.g. a locally created ValueNotifier)
+// When using target: WITHOUT select:, the target MUST be a Listenable and the handler value is typed as Object
+
+// ❌ WRONG - target: with a ValueListenable loses type info, handler value typed as Object
+// registerHandler(
+//   target: authManager.loginCommand.errors,  // loses type!
+//   handler: (context, error, _) {
+//     final commandError = error as CommandError;  // ugly cast needed
+//   },
+// );
+
+// ✅ CORRECT - select: from get_it type, handler value is fully typed
+registerHandler(
+  select: (AuthManager m) => m.loginCommand.errors,
+  handler: (context, error, _) {
+    // error is CommandError? — handler never fires with null, use ! to promote
+    showError(error!.error.toString());
+  },
+);
+
+// registerHandler with local target (for Listenables NOT in get_it)
+// Use target: + select: together when the Listenable is local
 registerHandler(
   target: myLocalNotifier,
   select: (MyNotifier x) => x.someProperty,
@@ -300,12 +359,42 @@ class WcCommandButton extends WatchingWidget {
 }
 ```
 
-**Error handling with registerHandler**:
+**Reacting to command completion** (see also command_it skill):
+
+A Command is itself a ValueListenable with three levels of observation:
+
 ```dart
+// ✅ BEST — Watch the command itself: fires ONLY on successful completion
 registerHandler(
-  select: (CheckoutManager m) => m.submitOrderCommand.errors,
+  select: (MyManager m) => m.saveCommand,
+  handler: (context, _, __) {
+    navigateAway();  // Only called on success
+  },
+);
+
+// ✅ Watch .errors: fires ONLY on errors
+registerHandler(
+  select: (MyManager m) => m.saveCommand.errors,
   handler: (context, error, _) {
-    handleMarketplaceApiError(error, custom404Message: 'Not found');
+    showError(error!.error.toString());
+  },
+);
+
+// Watch .results: fires on EVERY state change (isRunning, success, error)
+registerHandler(
+  select: (MyManager m) => m.saveCommand.results,
+  handler: (context, result, _) {
+    if (result.isSuccess) { ... }
+    if (result.hasError) { ... }
+    if (result.isRunning) { ... }
+  },
+);
+
+// ❌ DON'T use isRunning to detect success — fragile and ambiguous
+registerHandler(
+  select: (MyManager m) => m.saveCommand.isRunning,
+  handler: (context, isRunning, _) {
+    if (!isRunning && noError) { ... }  // Easy to get wrong
   },
 );
 ```
