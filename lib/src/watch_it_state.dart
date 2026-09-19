@@ -361,7 +361,7 @@ class _WatchItState {
     return actualTarget;
   }
 
-  watchPropertyValue<T extends Listenable, R>({
+  void watchPropertyValue<T extends Listenable, R>({
     required T listenable,
     required R Function(T) only,
     Object? parentObject,

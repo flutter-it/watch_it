@@ -8,6 +8,10 @@
 * If the object resolved from get_it is a different instance than on the previous build (e.g. a cached factory returned a new instance because the params changed, or a singleton was re-registered), the watch now re-subscribes to the new instance automatically instead of staying on the old one. `allowObservableChange`/`allowStreamChange`/`allowFutureChange` are still only required when the *selector* returns a different observable from the same parent.
 * Debug mode only: watching a type registered with `registerFactory`/`registerFactoryParam` now throws a `StateError`, because every build would get a new instance and the widget could never stay subscribed. Use `registerCachedFactory`/`registerCachedFactoryParam`, a singleton, or pass the instance via `target:`. Passing `param1`/`param2` for a registration that isn't a cached factory, or combining them with `target:`, also throws.
 
+### Maintenance
+
+* Updated to flutter_lints 6 and fixed an analyzer info reported by pub.dev.
+
 ## 2.4.2
 
 * Added AI skill files in `skills/` directory for AI coding assistants

@@ -1,6 +1,6 @@
 name: watch_it
 description: The simple state management powered by get_it. It allows to observe changes of objects inside the get_it service locator and rebuild the UI accordingly.
-version: 2.4.2
+version: 2.5.0
 homepage: https://github.com/flutter-it/watch_it
 funding:
   - https://github.com/sponsors/escamoteur/
@@ -28,7 +28,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
