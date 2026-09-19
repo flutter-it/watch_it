@@ -1,3 +1,9 @@
+## 2.5.0
+
+### Maintenance
+
+- Updated to flutter_lints 6 and fixed an analyzer info reported by pub.dev.
+
 ## 2.4.2
 
 * Added AI skill files in `skills/` directory for AI coding assistants
