@@ -1237,82 +1237,6 @@ void main() {
       final exception = tester.takeException();
       expect(exception, isA<StateError>());
     });
-
-    testWidgets(
-        'watchValue updates and resubscribes when parent object changes with param1',
-        (tester) async {
-      final managerA = _ParamTestManager('A', ValueNotifier('A_init'));
-      final managerB = _ParamTestManager('B', ValueNotifier('B_init'));
-
-      GetIt.I.registerFactoryParam<_ParamTestManager, String, void>(
-        (param1, _) => param1 == 'A' ? managerA : managerB,
-      );
-
-      String param = 'A';
-
-      await tester.pumpWidget(Directionality(
-        textDirection: TextDirection.ltr,
-        child: StatefulBuilder(
-          builder: (context, setState) {
-            return _WatcherParamWidget(
-              param: param,
-              onSwitch: () => setState(() => param = 'B'),
-            );
-          },
-        ),
-      ));
-
-      expect(find.text('A_init'), findsOneWidget);
-
-      managerA.notifier.value = 'A_updated';
-      await tester.pump();
-      expect(find.text('A_updated'), findsOneWidget);
-
-      // Switch param to B
-      await tester.tap(find.byType(GestureDetector));
-      await tester.pump();
-      expect(find.text('B_init'), findsOneWidget);
-
-      // Verify B's updates are listened to and trigger rebuilds
-      managerB.notifier.value = 'B_updated';
-      await tester.pump();
-      expect(find.text('B_updated'), findsOneWidget);
-    });
-
-    testWidgets(
-        'watchValue resubscribes when factory recreates parent object instance with same param',
-        (tester) async {
-      ValueNotifier<String> currentNotifier = ValueNotifier('instance1');
-      GetIt.I.registerFactoryParam<_ParamTestManager, String, void>(
-        (param1, _) => _ParamTestManager(param1, currentNotifier),
-      );
-
-      await tester.pumpWidget(Directionality(
-        textDirection: TextDirection.ltr,
-        child: StatefulBuilder(
-          builder: (context, setState) {
-            return _RecreateInstanceWidget(
-              onRecreate: () {
-                currentNotifier = ValueNotifier('instance2');
-                setState(() {});
-              },
-            );
-          },
-        ),
-      ));
-
-      expect(find.text('instance1'), findsOneWidget);
-
-      // Recreate instance (simulates eviction and recreation)
-      await tester.tap(find.byType(GestureDetector));
-      await tester.pump();
-      expect(find.text('instance2'), findsOneWidget);
-
-      // Verify that updates to the new instance notifier trigger rebuilds!
-      currentNotifier.value = 'instance2_updated';
-      await tester.pump();
-      expect(find.text('instance2_updated'), findsOneWidget);
-    });
   });
 }
 
@@ -1487,56 +1411,6 @@ class _ObservableChangeErrorWidget extends StatelessWidget with WatchItMixin {
     return GestureDetector(
       onTap: onSwitch,
       child: const Text('Widget'),
-    );
-  }
-}
-
-class _ParamTestManager {
-  final String id;
-  final ValueNotifier<String> notifier;
-  _ParamTestManager(this.id, this.notifier);
-}
-
-class _WatcherParamWidget extends StatelessWidget with WatchItMixin {
-  final String param;
-  final VoidCallback onSwitch;
-
-  const _WatcherParamWidget({
-    required this.param,
-    required this.onSwitch,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final value = watchValue(
-      (_ParamTestManager m) => m.notifier,
-      param1: param,
-    );
-
-    return GestureDetector(
-      onTap: onSwitch,
-      child: Text(value),
-    );
-  }
-}
-
-class _RecreateInstanceWidget extends StatelessWidget with WatchItMixin {
-  final VoidCallback onRecreate;
-
-  const _RecreateInstanceWidget({
-    required this.onRecreate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final value = watchValue(
-      (_ParamTestManager m) => m.notifier,
-      param1: 'constant_feed_url',
-    );
-
-    return GestureDetector(
-      onTap: onRecreate,
-      child: Text(value),
     );
   }
 }

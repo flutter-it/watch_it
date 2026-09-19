@@ -135,6 +135,29 @@ Execute side effects without rebuilding:
 
 - **[registerChangeNotifierHandler](https://flutter-it.dev/documentation/watch_it/handlers#registerchangenotifierhandler-for-changenotifier)** — React to ChangeNotifier changes
 
+### Watching objects created by cached factories with parameters
+
+If you have one manager per entity (e.g. per station id), register it with `registerCachedFactoryParam` and pass the parameter to the watch function. When the parameter changes, watch_it automatically unsubscribes from the old instance and subscribes to the new one:
+
+```dart
+di.registerCachedFactoryParam<StationManager, String, void>(
+  (stationId, _) => StationManager(stationId),
+);
+
+class StationTile extends WatchingWidget {
+  final String stationId;
+  const StationTile({super.key, required this.stationId});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = watchValue((StationManager m) => m.name, param1: stationId);
+    return Text(name);
+  }
+}
+```
+
+`param1`/`param2` are available on all watch and handler functions that resolve their object from get_it. They are only valid for types registered with `registerCachedFactoryParam`. Plain `registerFactory` registrations can't be watched at all (every build would get a new instance) and are rejected in debug mode.
+
 ### Lifecycle Helpers
 
 Powerful functions for StatelessWidgets:
@@ -205,13 +228,23 @@ class MyWidget extends WatchingWidget {
 
 ## AI-Assisted Development
 
-This package includes **AI skill files** in the `skills/` directory that help AI coding assistants
-(Claude Code, Cursor, GitHub Copilot, and others) generate correct code using watch_it.
+This package ships an [Agent Skill](https://agentskills.io) for AI coding assistants
+(Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI and others) in `skills/watch-it-expert/`.
+It teaches them the critical rules, common patterns and anti-patterns of watch_it.
+Install it into your project with the official Dart skills tool:
 
-The skill files teach AI tools critical rules like watch ordering, common patterns, and anti-patterns specific to watch_it.
-Included skills: `watch-it-expert`, `get-it-expert`, `flutter-architecture-expert`, `feed-datasource-expert`.
+```bash
+dart run skills@ get
+```
 
-They follow the [Agent Skills](https://github.com/agentskills) open standard.
+> `dart run skills@ get` only looks at *direct* dependencies. If you use get_it through watch_it, add `get_it` to your pubspec as well to also get `get-it-expert`.
+
+For the ecosystem-wide skills (architecture guidance, feed/data-source patterns, overview)
+and the skills of the other flutter_it packages run:
+
+```bash
+dart run skills@ add flutter-it/flutter_it
+```
 
 [Learn more about AI skills →](https://flutter-it.dev/misc/ai_skills)
 

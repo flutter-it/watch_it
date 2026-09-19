@@ -240,8 +240,14 @@ class _WatchItState {
     Listenable actualTarget;
 
     if (watch != null) {
+      /// If the parent object (the object the selector is applied to) is a
+      /// different instance than on the last build (e.g. a cached factory
+      /// returned a new instance because the params changed, or a singleton
+      /// was re-registered) we must not use the cached observable but
+      /// re-run the selector and re-subscribe. This doesn't require
+      /// [allowObservableChange] because the selector itself didn't change
+      /// its behaviour, only its input.
       final parentChanged = selector != null &&
-          watch.parentObject != null &&
           !identical(watch.parentObject, parentOrListenable);
 
       if (!parentChanged && !allowObservableChange && selector != null) {
@@ -259,6 +265,8 @@ class _WatchItState {
       }
 
       if (actualTarget == watch.observedObject) {
+        /// same observable (possibly reached through a new parent instance)
+        /// no need to re-subscribe
         watch.parentObject = parentOrListenable;
         return watch.observedObject;
       }
@@ -367,6 +375,9 @@ class _WatchItState {
         watch.dispose();
         watch.observedObject = listenable;
         watch.parentObject = parentObject;
+        // the comparison value must come from the new instance, otherwise the
+        // first notification of the new instance could be swallowed
+        watch.lastValue = only(listenable);
       } else {
         // if the listenable is the same we can directly return
         return;
@@ -419,9 +430,9 @@ class _WatchItState {
     Stream<R> actualStream;
 
     if (watch != null) {
-      final parentChanged = selector != null &&
-          watch.parentObject != null &&
-          !identical(watch.parentObject, parentOrStream);
+      /// see [watchListenable] for why a changed parent bypasses the fast path
+      final parentChanged =
+          selector != null && !identical(watch.parentObject, parentOrStream);
 
       if (!parentChanged && !allowStreamChange && selector != null) {
         // FAST PATH: Don't call selector, reuse cached stream
@@ -447,6 +458,9 @@ class _WatchItState {
         }
 
         if (actualStream == watch.observedObject) {
+          /// same stream (possibly reached through a new parent instance)
+          watch.parentObject = parentOrStream;
+
           /// Only if this isn't used to register a handler
           ///  still the same stream so we can directly return last value
           if (handler == null) {
@@ -640,10 +654,11 @@ class _WatchItState {
 
     R? initialValue;
     if (watch != null) {
-      final parentChanged = selector != null &&
-          parentOrFuture != null &&
-          watch.parentObject != null &&
-          !identical(watch.parentObject, parentOrFuture);
+      /// see [watchListenable] for why a changed parent bypasses the fast path.
+      /// A selector is only ever passed together with a non-null parent
+      /// (asserted below), the [futureProvider] callers pass neither.
+      final parentChanged =
+          selector != null && !identical(watch.parentObject, parentOrFuture);
 
       if (!parentChanged &&
           !allowFutureChange &&
@@ -675,6 +690,9 @@ class _WatchItState {
 
         // Check if the Future identity has changed
         if (future == watch.observedObject) {
+          /// same Future (possibly reached through a new parent instance)
+          watch.parentObject = parentOrFuture;
+
           ///  still the same Future so we can directly return last value
           /// and call the Handler again as the state hasn't changed
           _callFutureHandlerIfNeeded(handler, watch, callHandlerOnlyOnce);

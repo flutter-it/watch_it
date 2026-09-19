@@ -23,6 +23,65 @@ final di = GetIt.I;
 /// alias for it.
 final sl = di;
 
+/// Debug-only sanity check for watch functions that resolve their object
+/// via get_it. It catches two silent misconfigurations:
+///
+/// * [T] is registered with `registerFactory`/`registerFactoryParam`: every
+///   build would get a brand-new instance, so the widget could never stay
+///   subscribed to it.
+/// * [param1]/[param2] were passed but [T] isn't a cached factory with
+///   parameters, so the params would be silently ignored.
+///
+/// Only runs inside `assert`, so it costs nothing in release builds.
+void _debugCheckRegistration<T extends Object>(
+  GetIt getIt,
+  String functionName,
+  String? instanceName,
+  dynamic param1,
+  dynamic param2,
+) {
+  assert(() {
+    final registration =
+        getIt.findFirstObjectRegistration<T>(instanceName: instanceName);
+    if (registration == null) {
+      // not registered - get_it throws its own, more detailed error
+      return true;
+    }
+    if (registration.registrationType == ObjectRegistrationType.alwaysNew) {
+      throw StateError('$functionName<$T>: $T is registered as a plain factory '
+          '(registerFactory/registerFactoryParam).\n'
+          'Every build would create a new instance, so watch_it could never '
+          'stay subscribed to it.\n'
+          'Register it with registerCachedFactory/registerCachedFactoryParam, '
+          'as a singleton, or pass the instance explicitly via `target:`.');
+    }
+    if ((param1 != null || param2 != null) && !registration.acceptsParams) {
+      throw StateError(
+          '$functionName<$T>: param1/param2 were passed but $T is not '
+          'registered with registerCachedFactoryParam, so the parameters '
+          'would be ignored.\n'
+          'Factory parameters only make sense for cached factories that '
+          'take parameters.');
+    }
+    return true;
+  }());
+}
+
+/// Debug-only check that [param1]/[param2] aren't combined with [target].
+/// When a [target] is passed get_it isn't consulted at all, so the params
+/// would be silently ignored.
+void _debugCheckNoParamsWithTarget(
+  String functionName,
+  Object? target,
+  dynamic param1,
+  dynamic param2,
+) {
+  assert(
+      target == null || (param1 == null && param2 == null),
+      '$functionName: param1/param2 cannot be combined with `target`. '
+      'The params are only used to resolve the object from get_it.');
+}
+
 /// The Watch functions:
 ///
 /// The watch functions are the core of this library. They allow you to observe
@@ -98,11 +157,23 @@ T watch<T extends Listenable>(T target) {
 /// with a name in get_it.
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
-T watchIt<T extends Listenable>({String? instanceName, GetIt? getIt}) {
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam`. If the params change between
+/// builds and get_it returns a different instance, the widget automatically
+/// switches its subscription to the new instance.
+T watchIt<T extends Listenable>({
+  String? instanceName,
+  GetIt? getIt,
+  dynamic param1,
+  dynamic param2,
+}) {
   assert(_activeWatchItState != null,
       'watchIt can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   final getItInstance = getIt ?? di;
-  final parentObject = getItInstance<T>(instanceName: instanceName);
+  _debugCheckRegistration<T>(
+      getItInstance, 'watchIt', instanceName, param1, param2);
+  final parentObject = getItInstance<T>(
+      instanceName: instanceName, param1: param1, param2: param2);
   _activeWatchItState!.watchListenable(parentOrListenable: parentObject);
   return parentObject;
 }
@@ -128,6 +199,11 @@ T watchIt<T extends Listenable>({String? instanceName, GetIt? getIt}) {
 /// with a name in get_it.
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam`. If the params change between
+/// builds and get_it returns a different instance, [selectProperty] is
+/// re-evaluated on the new instance and the widget switches its subscription
+/// to it. This does not require [allowObservableChange].
 R watchValue<T extends Object, R>(
   ValueListenable<R> Function(T) selectProperty, {
   bool allowObservableChange = false,
@@ -139,6 +215,8 @@ R watchValue<T extends Object, R>(
   assert(_activeWatchItState != null,
       'watchValue can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
   final getItInstance = getIt ?? di;
+  _debugCheckRegistration<T>(
+      getItInstance, 'watchValue', instanceName, param1, param2);
   final parentObject = getItInstance<T>(
       instanceName: instanceName, param1: param1, param2: param2);
   final observedObject = _activeWatchItState!.watchListenable<T, R>(
@@ -169,6 +247,10 @@ R watchValue<T extends Object, R>(
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, the widget switches its subscription to the new instance.
 R watchPropertyValue<T extends Listenable, R>(
   R Function(T) selectProperty, {
   T? target,
@@ -182,6 +264,11 @@ R watchPropertyValue<T extends Listenable, R>(
   late final T observedObject;
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget('watchPropertyValue', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(
+        getItInstance, 'watchPropertyValue', instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);
@@ -218,6 +305,12 @@ R watchPropertyValue<T extends Listenable, R>(
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, [select] is re-evaluated on the new instance and the
+/// widget switches its subscription to it. This does not require
+/// [allowStreamChange].
 AsyncSnapshot<R> watchStream<T extends Object, R>(
   Stream<R> Function(T)? select, {
   T? target,
@@ -233,6 +326,11 @@ AsyncSnapshot<R> watchStream<T extends Object, R>(
       'watchStream can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget('watchStream', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(
+        getItInstance, 'watchStream', instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);
@@ -274,6 +372,12 @@ AsyncSnapshot<R> watchStream<T extends Object, R>(
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, [select] is re-evaluated on the new instance and the
+/// widget observes the new Future instead. This does not require
+/// [allowFutureChange].
 AsyncSnapshot<R> watchFuture<T extends Object, R>(
   Future<R> Function(T)? select, {
   T? target,
@@ -289,6 +393,11 @@ AsyncSnapshot<R> watchFuture<T extends Object, R>(
       'watchFuture can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget('watchFuture', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(
+        getItInstance, 'watchFuture', instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);
@@ -335,6 +444,13 @@ AsyncSnapshot<R> watchFuture<T extends Object, R>(
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, [select] is re-evaluated on the new instance and the
+/// handler is moved to it (it is called immediately with the new value only if
+/// [executeImmediately] is `true`). This does not require
+/// [allowObservableChange].
 void registerHandler<T extends Object, R>({
   ValueListenable<R> Function(T)? select,
   required void Function(
@@ -352,6 +468,11 @@ void registerHandler<T extends Object, R>({
       'registerHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget('registerHandler', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(
+        getItInstance, 'registerHandler', instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);
@@ -386,6 +507,10 @@ void registerHandler<T extends Object, R>({
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, the handler is moved to the new instance.
 void registerChangeNotifierHandler<T extends ChangeNotifier>({
   required void Function(
           BuildContext context, T newValue, void Function() cancel)
@@ -398,9 +523,15 @@ void registerChangeNotifierHandler<T extends ChangeNotifier>({
   dynamic param2,
 }) {
   assert(_activeWatchItState != null,
-      'registerHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
+      'registerChangeNotifierHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget(
+      'registerChangeNotifierHandler', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(getItInstance, 'registerChangeNotifierHandler',
+        instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);
@@ -429,6 +560,12 @@ void registerChangeNotifierHandler<T extends ChangeNotifier>({
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, [select] is re-evaluated on the new instance and the
+/// handler is moved to the new Stream. This does not require
+/// [allowStreamChange].
 void registerStreamHandler<T extends Object, R>({
   Stream<R> Function(T)? select,
   required void Function(BuildContext context, AsyncSnapshot<R?> newValue,
@@ -446,6 +583,12 @@ void registerStreamHandler<T extends Object, R>({
       'registerStreamHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget(
+      'registerStreamHandler', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(
+        getItInstance, 'registerStreamHandler', instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);
@@ -489,6 +632,12 @@ void registerStreamHandler<T extends Object, R>({
 ///
 /// [getIt] is the optional instance of get_it to use if you don't want to use the
 /// default one. 99% of the time you won't need this.
+/// [param1] and [param2] are forwarded to get_it and are only valid if [T] was
+/// registered with `registerCachedFactoryParam` (they cannot be combined with
+/// [target]). If the params change between builds and get_it returns a
+/// different instance, [select] is re-evaluated on the new instance and the
+/// handler is moved to the new Future. This does not require
+/// [allowFutureChange].
 void registerFutureHandler<T extends Object, R>({
   Future<R> Function(T)? select,
   T? target,
@@ -507,6 +656,12 @@ void registerFutureHandler<T extends Object, R>({
       'registerFutureHandler can only be called inside a build function within a WatchingWidget or a widget using the WatchItMixin');
 
   final getItInstance = getIt ?? di;
+  _debugCheckNoParamsWithTarget(
+      'registerFutureHandler', target, param1, param2);
+  if (target == null) {
+    _debugCheckRegistration<T>(
+        getItInstance, 'registerFutureHandler', instanceName, param1, param2);
+  }
   final parentObject = target ??
       getItInstance<T>(
           instanceName: instanceName, param1: param1, param2: param2);

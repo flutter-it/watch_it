@@ -20,8 +20,8 @@ topics:
   - get-it
 
 dependencies:
-  get_it: ^9.2.0
-  listen_it: ^5.3.3
+  get_it: ^9.3.0
+  listen_it: ^6.0.0
   flutter:
     sdk: flutter
 

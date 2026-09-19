@@ -1,6 +1,6 @@
 ---
 name: watch-it-expert
-description: Expert guidance on watch_it reactive widget state management for Flutter. Covers watch functions (watch, watchIt, watchValue, watchStream, watchFuture), handler registration (registerHandler, registerStreamHandler, registerFutureHandler), lifecycle functions (callOnce, createOnce, onDispose), ordering rules, widget granularity, and startup orchestration. Use when building reactive widgets with watch_it, watching ValueListenables/Streams/Futures, or managing widget-scoped state.
+description: Expert guidance on watch_it reactive widget state management for Flutter. Covers watch functions (watch, watchIt, watchValue, watchStream, watchFuture), handler registration (registerHandler, registerStreamHandler, registerFutureHandler), lifecycle functions (callOnce, createOnce, onDispose), ordering rules, watching cached factories with parameters (param1/param2, per-entity managers), widget granularity, and startup orchestration. Use when building reactive widgets with watch_it, watching ValueListenables/Streams/Futures, or managing widget-scoped state.
 metadata:
   author: flutter-it
   version: "1.0"
@@ -10,6 +10,8 @@ metadata:
 
 **What**: Reactive widgets that auto-rebuild when ValueListenables/Listenables, Streams, or Futures change. Built on get_it. Provides `di` global alias for `GetIt.I`.
 
+**Related skill**: registration/scopes/async-init details live in `get-it-expert`. `dart run skills@ get` only installs skills of *direct* dependencies, so add `get_it` to your pubspec as well, or run `dart run skills@ add flutter-it/flutter_it` to get all flutter_it skills.
+
 ## CRITICAL RULES
 
 - **ORDERING**: All `watch*()`, `registerHandler*()`, `createOnce()`, `callOnce()` calls MUST execute in the same order on every build (like React Hooks)
@@ -17,6 +19,8 @@ metadata:
 - **Never in callbacks**: Don't call watch functions inside builders, callbacks, or event handlers
 - `watchValue` selector MUST return a `ValueListenable<R>`, not a bare value
 - `createOnce` works in BOTH stateless and stateful widgets
+- NEVER watch a type registered with plain `registerFactory`/`registerFactoryParam` — throws `StateError` in debug (every build would get a new instance). Use `registerCachedFactory(Param)`, a singleton, or pass the instance via `target:` (v2.5.0+)
+- Passing `param1`/`param2` for a registration that doesn't take params (or combining them with `target:`) throws in debug (v2.5.0+)
 
 ## Widget Types
 
@@ -106,6 +110,19 @@ final snapshot = watchFuture<Future<Config>, Config>(
   initialValue: defaultConfig,
 );
 ```
+
+## Cached Factories with Parameters (v2.5.0+, requires get_it 9.3.0)
+
+`watchIt`, `watchValue`, `watchPropertyValue`, `watchStream`, `watchFuture`, `registerHandler`, `registerChangeNotifierHandler`, `registerStreamHandler` and `registerFutureHandler` accept `param1`/`param2`, forwarded to `getIt<T>(param1:, param2:)`. Pattern for per-entity managers (one instance per id):
+
+```dart
+di.registerCachedFactoryParam<StationManager, String, void>((id, _) => StationManager(id));
+
+// in a WatchingWidget:
+final station = watchValue((StationManager m) => m.station, param1: widget.stationId);
+```
+
+Alternative to `createOnce(() => StationManager(id))` + `watch(...)`: the instance is shared by all widgets using the same param and cached (weak reference) by get_it; when the param changes between builds, watch_it re-subscribes to the new instance automatically.
 
 ## The Ordering Rule
 
@@ -249,7 +266,7 @@ registerFutureHandler<ApiClient, Config>(
 );
 ```
 
-**allowObservableChange / allowStreamChange / allowFutureChange**: By default `false`, which means the `select` function is only called once on the first build and the result is **cached**. This makes it safe to use derived observables like `listenable.map(...)` or `listenable.where(...)` inside `select` - they won't be recreated on every rebuild. Only set to `true` if you intentionally need to **switch** to a different observable/stream/future between builds (e.g. switching data sources based on state).
+**allowObservableChange / allowStreamChange / allowFutureChange**: By default `false`, which means the `select` function is only called once on the first build and the result is **cached**. This makes it safe to use derived observables like `listenable.map(...)` or `listenable.where(...)` inside `select` - they won't be recreated on every rebuild. Only set to `true` if you intentionally need to **switch** to a different observable/stream/future between builds (e.g. switching data sources based on state). If the *parent* resolved from get_it is a different instance than on the previous build (cached factory with new params, or a re-registered singleton), watch_it re-subscribes automatically without `allowObservableChange` (v2.5.0+).
 
 ## Startup Orchestration
 
